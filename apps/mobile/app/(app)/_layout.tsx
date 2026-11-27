@@ -7,7 +7,7 @@ import { registerForPushNotifications } from "@/lib/notifications";
 import { Loader } from "@/components/ui";
 import { OfflineBanner } from "@/components/offline-banner";
 import { theme } from "@/lib/theme";
-import { ErrorBoundary } from "@/components/error-boundary";
+import { ErrorBoundary as UiErrorBoundary } from "@/components/error-boundary";
 import { log } from "@/lib/runtime";
 
 function Icon({ name, color }: { name: "home" | "trophy" | "matches" | "leaderboard" | "profile"; color: string }) {
@@ -46,7 +46,7 @@ export default function AppLayout() {
   if (!session) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <ErrorBoundary scope="tabs">
+    <UiErrorBoundary scope="tabs">
       <OfflineBanner />
       <Tabs
         screenOptions={{
@@ -97,6 +97,6 @@ export default function AppLayout() {
         <Tabs.Screen name="settings" options={{ href: null, title: "Settings" }} />
         <Tabs.Screen name="support" options={{ href: null, title: "Support" }} />
       </Tabs>
-    </ErrorBoundary>
+    </UiErrorBoundary>
   );
 }

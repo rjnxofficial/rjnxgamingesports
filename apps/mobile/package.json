@@ -15,7 +15,8 @@
     "ios": "expo run:ios",
     "android:sign": "node scripts/configure-android-signing.mjs",
     "android:verify": "node scripts/verify-android-project.mjs",
-    "android:sdk": "node scripts/android-sdk-requirements.mjs"
+    "android:sdk": "node scripts/android-sdk-requirements.mjs",
+    "verify:routes": "node scripts/verify-bundle-exports.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -8,7 +8,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { AuthProvider } from "@/lib/auth";
 import { useNotificationObserver } from "@/lib/notifications";
 import { useBrandFonts } from "@/lib/fonts";
-import { ErrorBoundary } from "@/components/error-boundary";
+import { ErrorBoundary as UiErrorBoundary } from "@/components/error-boundary";
 import { Logo } from "@/components/logo";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { installGlobalErrorHandlers, log, markBoot } from "@/lib/runtime";
@@ -120,7 +120,7 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary scope="root">
+    <UiErrorBoundary scope="root">
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <AuthProvider>
@@ -145,7 +145,7 @@ export default function RootLayout() {
           </AuthProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </ErrorBoundary>
+    </UiErrorBoundary>
   );
 }
 
