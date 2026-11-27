@@ -263,14 +263,20 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
+      EXPO_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # "configured" proves the real build boots; "unconfigured" proves the
+          # app degrades to its configuration screen instead of crashing. Both
+          # APKs come from the same build, only the assertion differs, so the
+          # matrix documents the expected behaviour rather than the env.
           - label: configured
             mode: configured
-            url: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
-            key: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -295,8 +301,6 @@ jobs:
       - name: Run the app on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ matrix.url }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ matrix.key }}
           SMOKE_MODE: ${{ matrix.mode }}
         with:
           api-level: 34
