@@ -15,6 +15,12 @@ Snapshot date: 2026-11-26. Every command below was executed in this repository.
 | Runtime smoke test | `next start` + 40 HTTP requests | ✅ 0 × 5xx, auth gates redirect correctly |
 | Android bundle | `npx expo export --platform android` | ✅ Hermes bundle 5.17 MB |
 | Android native config | `npx expo prebuild -p android` | ✅ project generates cleanly |
+| Android project audit | `npm run android:verify -w @rjnx/mobile` | ✅ applicationId, versionCode, signing, fonts, SDK levels |
+| Android signing (no secrets) | `node scripts/configure-android-signing.mjs` | ✅ exits 0, leaves stock debug signing untouched |
+| Android signing (base64 keystore) | same script + `ANDROID_KEYSTORE_BASE64` | ✅ `keystore.properties` + conditional `signingConfigs.release` patch |
+| Android SDK requirements | `npm run android:sdk -w @rjnx/mobile` | ✅ compile 36 / target 36 / min 24, build-tools 36.0.0, ndk 27.1.12297006 |
+| Workflow lint | `npm run verify:workflows` | ✅ 3 workflows, no `secrets.*` in `if:`, all actions on node24 majors |
+| Supabase schema audit | `node apps/web/scripts/verify-supabase.mjs` | ✅ 7 migrations, 21 tables all RLS-protected, 8 RPCs |
 
 `npm run verify` runs typecheck → lint → tests → build in one command; it is the
 same sequence CI enforces before deploying.
@@ -119,10 +125,14 @@ configuration + documented steps rather than a live run:
    `*.supabase.co` is blocked here. Mitigation: migrations are idempotent and
    non-destructive, `npm run db:check` inspects before writing, CI applies them
    with `DATABASE_URL`.
-2. **Play-signed APK/AAB.** No JDK/Android SDK in the sandbox. Mitigation:
-   `expo export` and `expo prebuild` both succeed here, and
-   `.github/workflows/android.yml` builds the signed APK + AAB on GitHub runners
-   with your keystore secrets.
+2. **Gradle `assembleRelease` / `bundleRelease`.** This sandbox has no JDK and no
+   Android SDK, and `dl.google.com`, `services.gradle.org` and
+   `repo1.maven.org` are blocked, so Gradle cannot resolve its plugin/dependency
+   graph here. Everything Gradle consumes *is* verified locally: `expo export`
+   (Hermes bundle 5.17 MB), `expo prebuild` (project generates), signing patch
+   (both modes), and a static audit of the generated project. The APK and AAB
+   are built and uploaded by `.github/workflows/android.yml`; the run URL and
+   artifact links are reported with the CI results.
 3. **End-to-end Razorpay checkout.** Requires live keys and a public webhook URL.
    The module stays disabled until `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` are set
    (the checkout button is hidden and the routes answer `503`), and the

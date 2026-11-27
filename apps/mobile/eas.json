@@ -14,19 +14,24 @@
       "channel": "preview",
       "android": { "buildType": "apk" }
     },
-    "production": {
-      "channel": "production",
-      "android": { "buildType": "app-bundle" },
-      "autoIncrement": true
-    },
     "production-apk": {
       "channel": "production",
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "autoIncrement": true
+    },
+    "production": {
+      "channel": "production",
+      "android": { "buildType": "app-bundle" },
+      "autoIncrement": true
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./play-service-account.json",
+        "track": "internal"
+      }
+    }
   }
 }

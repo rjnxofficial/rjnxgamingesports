@@ -25,6 +25,12 @@ apps/mobile/ios/
 *.aab
 *.keystore
 *.jks
+# release signing material / Play credentials (CI secrets only)
+apps/mobile/android/
+apps/mobile/keystore.properties
+play-service-account.json
+*.p8
+*.p12
 # os / editors
 .DS_Store
 *.log
