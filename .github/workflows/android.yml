@@ -212,7 +212,9 @@ jobs:
         working-directory: apps/mobile/android
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('../../package.json').version")
+          # cwd is apps/mobile/android, so the app manifest lives one level up.
+          VERSION=$(node -p "require('../package.json').version")
+          echo "version=$VERSION mode=$SIGNING_MODE"
           mkdir -p /tmp/rjnx-out
           cp app/build/outputs/apk/release/*.apk "/tmp/rjnx-out/rjnx-esports-${VERSION}-${SIGNING_MODE}.apk"
           cp app/build/outputs/bundle/release/*.aab "/tmp/rjnx-out/rjnx-esports-${VERSION}-${SIGNING_MODE}.aab"
