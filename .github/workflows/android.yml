@@ -312,19 +312,55 @@ jobs:
           name: rjnx-esports-apk
           path: /tmp/rjnx-apk
 
-      # smoke_only runs reuse the newest successful APK so a logcat iteration
-      # takes minutes instead of rebuilding Gradle from scratch.
+      # smoke_only reuses the newest successful APK from this branch so a logcat
+      # iteration takes minutes instead of rebuilding Gradle from scratch.
+      # Every failure mode is asserted with an annotation, because the step log
+      # is not always reachable from the tooling that triages these runs.
       - name: Download the newest successful APK (smoke_only)
         if: needs.build.result != 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow android.yml --status success --limit 20 \
-            --json databaseId,headBranch --jq --arg branch "$GITHUB_REF_NAME" '[.[] | select(.headBranch == $branch)][0].databaseId')
-          echo "reusing artifacts from run $run_id"
-          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n rjnx-esports-apk -D /tmp/rjnx-apk
+          api() { curl -fsS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/$1"; }
+
+          echo "branch=$BRANCH"
+          api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100&status=success" > /tmp/runs.json || {
+            echo "::error title=rjnx smoke::cannot list workflow runs"; exit 1; }
+          run_id=$(BRANCH="$BRANCH" node -e '
+            const data = require("/tmp/runs.json");
+            const match = (data.workflow_runs || []).find(
+              (run) => run.name === "Android App" && run.head_branch === process.env.BRANCH,
+            );
+            process.stdout.write(match ? String(match.id) : "");
+          ')
+          if [ -z "$run_id" ]; then
+            echo "::error title=rjnx smoke::no successful Android App run on $BRANCH — run the full workflow"
+            exit 1
+          fi
+          echo "::notice title=rjnx smoke::reusing run $run_id"
+
+          api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" > /tmp/artifacts.json || {
+            echo "::error title=rjnx smoke::cannot list artifacts of run $run_id"; exit 1; }
+          artifact_id=$(node -e '
+            const data = require("/tmp/artifacts.json");
+            const match = (data.artifacts || []).find((a) => a.name === "rjnx-esports-apk" && !a.expired);
+            process.stdout.write(match ? String(match.id) : "");
+          ')
+          if [ -z "$artifact_id" ]; then
+            echo "::error title=rjnx smoke::run $run_id has no unexpired rjnx-esports-apk artifact"
+            exit 1
+          fi
+          echo "downloading artifact $artifact_id"
+          curl -fsSL -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" -o /tmp/rjnx-apk.zip || {
+            echo "::error title=rjnx smoke::artifact download failed"; exit 1; }
+          mkdir -p /tmp/rjnx-apk && unzip -q -o /tmp/rjnx-apk.zip -d /tmp/rjnx-apk
           find /tmp/rjnx-apk -type f | head
+          if ! find /tmp/rjnx-apk -type f -name '*.apk' | grep -q .; then
+            echo "::error title=rjnx smoke::artifact zip has no .apk"; exit 1
+          fi
 
       - name: Run the app on an emulator
         uses: reactivecircus/android-emulator-runner@v2
