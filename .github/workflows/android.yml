@@ -308,20 +308,8 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 3072
-          script: |
-            set -uo pipefail
-            echo "::notice title=rjnx smoke::emulator up — starting checks"
-            adb devices
-            # download-artifact may nest the payload; search recursively.
-            find /tmp/rjnx-apk -type f | head -20
-            APK=$(find /tmp/rjnx-apk -type f -name '*.apk' | head -1)
-            if [ -z "${APK:-}" ]; then
-              echo "::error title=rjnx smoke::no APK found in the downloaded artifact"
-              exit 1
-            fi
-            ls -lh "$APK"
-            echo "testing $APK"
-            bash apps/mobile/scripts/smoke-android-apk.sh "$APK" || exit $?
+          # The action runs this with /usr/bin/sh; the wrapper is POSIX-only.
+          script: sh apps/mobile/scripts/smoke-emulator-entry.sh
 
       - name: Publish logcat summary
         if: always()
