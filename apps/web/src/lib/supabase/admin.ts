@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import type { RjnxClient } from "./types";
 import { optionalEnv, hasServiceRole } from "@/lib/env";
-import { RJNX_SCHEMA } from "./client";
+import { RJNX_SCHEMA } from "./schema";
 
 let adminClient: RjnxClient | null = null;
 

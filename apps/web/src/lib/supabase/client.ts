@@ -3,8 +3,9 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { RjnxClient } from "./types";
 import { optionalEnv } from "@/lib/env";
+import { RJNX_SCHEMA } from "./schema";
 
-export const RJNX_SCHEMA = "rjnx";
+export { RJNX_SCHEMA };
 
 let browserClient: RjnxClient | null = null;
 

@@ -78,9 +78,14 @@ jobs:
             const fs = require("fs");
             let data;
             try { data = JSON.parse(fs.readFileSync("/tmp/db-status.json", "utf8")); } catch { process.exit(0); }
-            for (const row of [...data.tables, ...data.views]) {
-              if (row.status !== "ok") {
-                console.log(`::error title=Supabase ${row.table} (${row.status})::${(row.detail || "not reachable with the publishable key").replace(/[\r\n]+/g, " ")}`);
+            const notExposed = [...data.tables, ...data.views].filter((r) => r.status === "schema-not-exposed");
+            if (notExposed.length) {
+              console.log("::error title=Supabase schema rjnx is not exposed::Project Settings -> API -> Exposed schemas must include rjnx, then reload PostgREST. Every table is unreachable until this is fixed.");
+            } else {
+              for (const row of [...data.tables, ...data.views]) {
+                if (row.status !== "ok") {
+                  console.log(`::error title=Supabase ${row.table} (${row.status})::${(row.detail || "not reachable with the publishable key").replace(/[\r\n]+/g, " ")}`);
+                }
               }
             }
             for (const row of data.rpcs) {

@@ -62,6 +62,15 @@ async function probeTable(table) {
       return { table, status: "ok", rows: Array.isArray(rows) ? rows.length : 0, ms };
     }
     const body = await response.text();
+    if (/PGRST106|Invalid schema/i.test(body)) {
+      // Everything is failing for the same reason; do not spam one row per table.
+      return {
+        table,
+        status: "schema-not-exposed",
+        detail: "PostgREST does not expose the rjnx schema (see remediation below)",
+        ms,
+      };
+    }
     const missing = response.status === 404 || /PGRST20[0-9]|does not exist/.test(body);
     return { table, status: missing ? "missing" : `http ${response.status}`, detail: body.slice(0, 160), ms };
   } catch (error) {
@@ -111,6 +120,21 @@ if (process.argv.includes("--json")) {
   for (const row of rpcs) console.log(`| ${row.name}() | rpc | ${row.status} |`);
 
   const broken = [...tables, ...views].filter((row) => row.status !== "ok");
+  const notExposed = broken.filter((row) => row.status === "schema-not-exposed");
+  if (notExposed.length) {
+    console.log(
+      [
+        "",
+        "REMEDIATION — the rjnx schema is not exposed to the Data API.",
+        "Supabase dashboard → Project Settings → API → Exposed schemas: add `rjnx`.",
+        "Or via SQL (service role):",
+        "  alter role authenticator set pgrst.db_schemas = 'public, graphql_public, rjnx';",
+        "  notify pgrst, 'reload config';",
+        "Then re-run: node apps/web/scripts/db-status.mjs",
+        "",
+      ].join("\n"),
+    );
+  }
   const missingRpcs = rpcs.filter((row) => row.status === "missing" || row.status === "unreachable");
   console.log("");
   if (broken.length || missingRpcs.length) {

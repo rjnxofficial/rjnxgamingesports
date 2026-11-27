@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { RjnxClient } from "./types";
 import { env } from "@/lib/env";
-import { RJNX_SCHEMA } from "./client";
+import { RJNX_SCHEMA } from "./schema";
 
 /**
  * Server Supabase client bound to the request cookies.
