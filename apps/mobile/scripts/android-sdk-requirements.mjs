@@ -95,9 +95,11 @@ if (args.has("--check")) {
   }
   let installed = "";
   try {
-    installed = execFileSync("sdkmanager", ["--list_installed"], { encoding: "utf8" });
+    installed = execFileSync(process.env.SDKMANAGER || "sdkmanager", ["--list_installed"], {
+      encoding: "utf8",
+    });
   } catch (error) {
-    console.error(`✗ sdkmanager failed: ${error.message}`);
+    console.error(`✗ ${process.env.SDKMANAGER || "sdkmanager"} failed: ${error.message}`);
     process.exit(1);
   }
   const missing = packages.filter(

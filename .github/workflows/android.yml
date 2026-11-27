@@ -101,21 +101,46 @@ jobs:
             gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
             gradle-${{ runner.os }}-
 
+      # The ubuntu runner image ships a complete Android SDK, but the variable
+      # that points at it and the sdkmanager location differ between image
+      # versions. Resolve both defensively instead of assuming env vars exist.
       - name: Resolve Android SDK location
         run: |
-          set -euo pipefail
-          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          if [ -z "${SDK:-}" ] || [ ! -d "$SDK" ]; then
-            echo "::error::No Android SDK on this runner (ANDROID_SDK_ROOT/ANDROID_HOME unset)"
+          set -uo pipefail
+          candidates=(
+            "${ANDROID_SDK_ROOT:-}"
+            "${ANDROID_HOME:-}"
+            "$HOME/android-sdk"
+            "$HOME/Android/Sdk"
+            "/usr/local/lib/android/sdk"
+            "/opt/android-sdk"
+          )
+          SDK=""
+          for candidate in "${candidates[@]}"; do
+            if [ -n "$candidate" ] && [ -d "$candidate/platforms" ]; then SDK="$candidate"; break; fi
+          done
+          if [ -z "$SDK" ]; then
+            echo "::error::No Android SDK found on this runner. Looked in: ${candidates[*]}"
+            ls -la "$HOME" || true
             exit 1
           fi
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK" -maxdepth 4 -type f -name sdkmanager -perm -u+x 2>/dev/null | head -1)"
+          fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found in $SDK"
+            find "$SDK" -maxdepth 3 -type d | head -30
+            exit 1
+          fi
+          echo "SDK=$SDK"
+          echo "SDKMANAGER=$SDKMANAGER"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "JAVA_HOME=${JAVA_HOME:-}"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
           java -version
-          command -v sdkmanager
           ls "$SDK"
-          echo "sdk=$SDK"
 
       - run: npm ci
 
@@ -132,11 +157,11 @@ jobs:
           set -euo pipefail
           mapfile -t packages < <(node apps/mobile/scripts/android-sdk-requirements.mjs --print-packages)
           echo "required: ${packages[*]}"
-          sdkmanager --list_installed | sed -n '1,25p'
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --list_installed | sed -n '1,25p'
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           missing=()
           while IFS= read -r pkg; do
-            if grep -qF "$pkg" <<< "$(sdkmanager --list_installed)"; then
+            if grep -qF "$pkg" <<< "$("$SDKMANAGER" --list_installed)"; then
               echo "already installed: $pkg"
             else
               missing+=("$pkg")
@@ -144,7 +169,7 @@ jobs:
           done < <(printf '%s\n' "${packages[@]}")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "installing: ${missing[*]}"
-            sdkmanager "${missing[@]}"
+            "$SDKMANAGER" "${missing[@]}"
           fi
 
       - name: Verify Android SDK
