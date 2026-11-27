@@ -7,12 +7,16 @@ Vercel project needs a couple of overrides.
 
 | Setting | Value |
 | --- | --- |
-| Root directory | `apps/web` |
+| Root directory | **repository root** (the monorepo `vercel.json` sits here) |
 | Framework preset | Next.js |
-| Install command | `cd ../.. && npm ci` |
-| Build command | `cd ../.. && npm run build -w @rjnx/web` |
-| Output directory | `.next` (default) |
-| Node version | 22.x |
+| Install command | `npm ci` |
+| Build command | `npm run build --workspace @rjnx/web` |
+| Output directory | `apps/web/.next` |
+| Node version | 24.x |
+
+`vercel.json` in the repository root pins these values, so a plain
+`vercel link` + `vercel deploy` (or the CI job) builds correctly without manual
+overrides. It also sets the `bom1` region and security headers.
 
 Environment variables (Production + Preview):
 
@@ -38,9 +42,38 @@ RAZORPAY_WEBHOOK_SECRET=<optional>
 
 ### CI deploy
 
-`.github/workflows/website.yml` runs typecheck → tests → lint → build on every
-push/PR, uploads the build output, and (on `main`, when the secrets exist)
-deploys to production and smoke-tests `/api/health`:
+`.github/workflows/website.yml` runs typecheck → tests → lint → static database
+audit → production build → **live smoke test against `next start`** on every
+push/PR. On `main` (and only when the secrets exist) it deploys to production,
+then runs `apps/web/scripts/smoke.mjs` against the deployed URL, which asserts
+`/api/health` reports a reachable database, all 15 public routes answer 200, the
+dashboard routes redirect anonymous visitors to `/login`, and all 15 admin
+routes are gated without 5xx.
+
+A missed database problem therefore fails the deploy job with an annotation
+naming the exact table or RPC.
+
+### Required Supabase project setting (this is not a code change)
+
+The app talks to the `rjnx` schema, so PostgREST must expose it:
+
+> Supabase dashboard → Project Settings → API → **Exposed schemas** →
+> add `rjnx` → Save (this reloads PostgREST).
+
+Equivalent SQL with the service role:
+
+```sql
+alter role authenticator set pgrst.db_schemas = 'public, graphql_public, rjnx';
+notify pgrst, 'reload config';
+```
+
+Migration `0008_expose_schema.sql` grants everything else that is needed
+(schema usage, sequence/default privileges, anon read grants, view grants). Until
+the schema is exposed, every query fails with
+`PGRST106: Invalid schema: rjnx` and `/api/health` reports `database: "error"`;
+CI prints that remediation directly in the failing check annotation.
+
+### Secrets
 
 | Secret | Purpose |
 | --- | --- |
