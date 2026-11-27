@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" fill="none" role="img" aria-label="FF">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1600" y2="700"><stop stop-color="#FF3B3B"/><stop offset="1" stop-color="#FF2ED1"/></linearGradient>
+    <radialGradient id="bg" cx=".5" cy=".1" r=".9"><stop stop-color="#12121d"/><stop offset="1" stop-color="#05050a"/></radialGradient>
+    <linearGradient id="fade" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#05050a"/><stop offset="1" stop-color="#05050a" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect width="1600" height="700" fill="url(#bg)"/>
+  <g stroke="url(#g)" stroke-opacity="0.22" stroke-width="1">
+    <path d="M0 700 L800 382 L1600 700"/>
+    <path d="M80 700 L800 338 L1520 700"/>
+    <path d="M160 700 L800 401 L1440 700"/>
+    <path d="M240 700 L800 312 L1360 700"/>
+    <path d="M320 700 L800 318 L1280 700"/>
+    <path d="M400 700 L800 437 L1200 700"/>
+    <path d="M480 700 L800 324 L1120 700"/>
+    <path d="M560 700 L800 393 L1040 700"/>
+    <path d="M640 700 L800 449 L960 700"/>
+    <path d="M720 700 L800 314 L880 700"/>
+    <path d="M800 700 L800 429 L800 700"/>
+    <path d="M880 700 L800 354 L720 700"/>
+    <path d="M960 700 L800 309 L640 700"/>
+    <path d="M1040 700 L800 322 L560 700"/>
+    <path d="M1120 700 L800 411 L480 700"/>
+    <path d="M1200 700 L800 407 L400 700"/>
+    <path d="M1280 700 L800 317 L320 700"/>
+    <path d="M1360 700 L800 361 L240 700"/>
+    <path d="M1440 700 L800 323 L160 700"/>
+    <path d="M1520 700 L800 441 L80 700"/>
+    <path d="M0 0 V700"/>
+    <path d="M160 0 V700"/>
+    <path d="M320 0 V700"/>
+    <path d="M480 0 V700"/>
+    <path d="M640 0 V700"/>
+    <path d="M800 0 V700"/>
+    <path d="M960 0 V700"/>
+    <path d="M1120 0 V700"/>
+    <path d="M1280 0 V700"/>
+    <path d="M1440 0 V700"/>
+  </g>
+  <g stroke="url(#g)" stroke-opacity="0.5" stroke-width="1.6">
+    <circle cx="800" cy="300" r="120" stroke-dasharray="2 8" />
+    <circle cx="800" cy="300" r="184" stroke-dasharray="4 12" />
+    <circle cx="800" cy="300" r="248" stroke-dasharray="8 16" />
+    <circle cx="800" cy="300" r="312" stroke-dasharray="4 12" />
+    <circle cx="800" cy="300" r="376" stroke-dasharray="4 12" />
+    <circle cx="800" cy="300" r="440" stroke-dasharray="8 16" />
+    <circle cx="800" cy="300" r="504" stroke-dasharray="8 16" />
+  </g>
+  <g stroke="url(#g)" stroke-opacity="0.75" stroke-width="2">
+    <path d="M800 60 1040 180.0 V420.0 L800 540 560 420.0 V180.0 Z" stroke-opacity="0.9"/>
+    <path d="M800 106 994 203.0 V397.0 L800 494 606 397.0 V203.0 Z" stroke-opacity="0.68"/>
+    <path d="M800 152 948 226.0 V374.0 L800 448 652 374.0 V226.0 Z" stroke-opacity="0.46"/>
+  </g>
+  <rect width="1600" height="700" fill="url(#fade)"/>
+  <text x="80" y="600" font-family="Orbitron, Rajdhani, sans-serif" font-size="72" font-weight="900" fill="#ffffff" fill-opacity="0.9" letter-spacing="6">FF</text>
+  <text x="82" y="644" font-family="Rajdhani, sans-serif" font-size="22" letter-spacing="8" fill="#FF3B3B" fill-opacity="0.85">RJNX GAMING ESPORTS</text>
+</svg>

@@ -1,0 +1,37 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+# builds
+.next/
+out/
+build/
+dist/
+.turbo/
+coverage/
+# env
+.env
+.env*.local
+.env.production
+!.env.example
+# supabase
+supabase/.branches
+supabase/.temp
+# expo / android
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.apk
+*.aab
+*.keystore
+*.jks
+# os / editors
+.DS_Store
+*.log
+npm-debug.log*
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# misc
+*.tsbuildinfo
+next-env.d.ts

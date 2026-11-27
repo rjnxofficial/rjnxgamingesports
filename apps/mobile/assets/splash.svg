@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1024" y2="1024">
+      <stop stop-color="#00CFFF"/><stop offset=".5" stop-color="#8B5CFF"/><stop offset="1" stop-color="#FF2ED1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#05050A"/>
+  <path d="M512 236 742 370v268L512 772 282 638V370L512 236Z" fill="none" stroke="url(#g)" stroke-width="12"/>
+  <path d="M386 664V356h122c58 0 96 34 96 86 0 40-22 68-56 79l62 143h-76l-56-108h-32v108h-60Zm60-158h48c24 0 40-14 40-35s-16-35-40-35h-48v70Z" fill="url(#g)"/>
+  <text x="512" y="856" font-family="Orbitron, sans-serif" font-size="46" font-weight="900" fill="#ffffff" letter-spacing="10" text-anchor="middle">RJNX</text>
+  <text x="512" y="906" font-family="Rajdhani, sans-serif" font-size="24" fill="#00CFFF" letter-spacing="8" text-anchor="middle">BE SAVAGE. NOT AVERAGE.</text>
+</svg>
