@@ -62,6 +62,26 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
         run: npm run build --workspace @rjnx/web
 
+      - name: Backend status (live Supabase probe)
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
+        run: |
+          set -uo pipefail
+          output=$(node apps/web/scripts/db-status.mjs 2>&1) && status=0 || status=$?
+          echo "$output"
+          {
+            echo "### Backend status"
+            echo
+            echo '```'
+            echo "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Supabase backend is not fully reachable (see the Backend status section in the run summary)."
+          fi
+
       - name: Smoke test the production server
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
