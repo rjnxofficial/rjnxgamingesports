@@ -1,34 +1,101 @@
 name: Database Migrations
 
+# Applies supabase/migrations/*.sql to the Supabase Postgres database.
+# With no DATABASE_URL secret configured the migration job is *skipped* (never a
+# misleading green run): the workflow validates the SQL statically instead so a
+# broken migration is still caught on every push.
+
 on:
   push:
     branches: [main]
     paths:
       - "supabase/migrations/**"
       - "supabase/seed.sql"
+      - "apps/web/scripts/**"
+      - ".github/workflows/database.yml"
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "apps/web/scripts/**"
       - ".github/workflows/database.yml"
   workflow_dispatch:
     inputs:
       seed:
-        description: "Also run seed.sql"
+        description: "Also apply supabase/seed.sql (reference data only, idempotent)"
         type: boolean
         default: false
 
 concurrency:
-  group: database-migrations
+  group: database-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # Public Supabase coordinates used by scripts/db-check.mjs (never secrets).
+  SUPABASE_PROJECT_REF: nuckewrlcjphjmnfgilo
+
 jobs:
+  validate:
+    name: Validate migrations (static, no credentials needed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint SQL + verify RLS / RPC coverage
+        run: node apps/web/scripts/verify-supabase.mjs
+
+      - name: Detect connection secret
+        id: creds
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "### Database credentials detected" >> "$GITHUB_STEP_SUMMARY"
+            echo "Migrations will be applied in the next job." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Database migration skipped (no \`DATABASE_URL\` secret)"
+              echo
+              echo "SQL was validated statically, but **nothing was applied** to the live database."
+              echo
+              echo "To enable automatic migrations add a repository secret:"
+              echo
+              echo '```'
+              echo 'gh secret set DATABASE_URL --body "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres"'
+              echo '```'
+              echo
+              echo "Get the connection string from Supabase → Project settings → Database → Connection string (URI)."
+              echo "Never commit the password — it belongs in the secret store only."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Database migration skipped::DATABASE_URL is not configured. SQL validated statically; no migration was applied."
+          fi
+
+    outputs:
+      configured: ${{ steps.creds.outputs.configured }}
+
   migrate:
     name: Apply migrations (rjnx schema)
+    needs: validate
+    if: needs.validate.outputs.configured == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -37,22 +104,29 @@ jobs:
       - name: Inspect target database (read-only)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        id: inspect
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::warning::DATABASE_URL secret missing — skipping inspection and migration."
-            exit 0
-          fi
-          npm run db:check --workspace @rjnx/web
+        run: npm run db:check --workspace @rjnx/web
 
-      - name: Apply migrations
-        if: ${{ secrets.DATABASE_URL != '' }}
+      - name: Apply pending migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run db:push --workspace @rjnx/web
 
       - name: Seed reference data
-        if: github.event_name == 'workflow_dispatch' && inputs.seed
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.seed == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: node apps/web/scripts/db-setup.mjs --with-seed
+        run: npm run db:push --workspace @rjnx/web -- --with-seed
+
+      - name: Verify schema after migration
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:check --workspace @rjnx/web
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Migrations applied"
+            echo
+            echo "Every file in \`supabase/migrations\` is recorded in \`rjnx.schema_migrations\`."
+            echo "The post-migration inspection above confirms tables, RLS coverage and applied files."
+          } >> "$GITHUB_STEP_SUMMARY"

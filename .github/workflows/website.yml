@@ -30,11 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -52,6 +52,9 @@ jobs:
       - name: Lint website
         run: npm run lint --workspace @rjnx/web
 
+      - name: Verify Supabase schema (static)
+        run: node apps/web/scripts/verify-supabase.mjs
+
       - name: Production build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
@@ -60,12 +63,14 @@ jobs:
         run: npm run build --workspace @rjnx/web
 
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: website-build
-          path: apps/web/.next
+          path: |
+            apps/web/.next
+            !apps/web/.next/cache
           retention-days: 3
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   deploy-vercel:
     name: Deploy to Vercel
@@ -74,41 +79,79 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Check Vercel secrets
         id: guard
-        run: |
-          if [ -n "${{ secrets.VERCEL_TOKEN }}" ] && [ -n "${{ secrets.VERCEL_ORG_ID }}" ] && [ -n "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Vercel secrets are not configured — skipping deploy. Add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID to enable."
-          fi
-
-      - name: Deploy to Vercel (production)
-        if: steps.guard.outputs.ready == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --cwd apps/web
-
-      - name: Smoke test health endpoint
-        if: steps.guard.outputs.ready == 'true'
         run: |
+          set -euo pipefail
+          if [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VERCEL_ORG_ID:-}" ] && [ -n "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Vercel credentials found — production deploy will run."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Website deployment skipped"
+              echo
+              echo "Vercel credentials are not configured, so nothing was deployed."
+              echo "Add these repository secrets to enable automatic production deploys:"
+              echo
+              echo "- \`VERCEL_TOKEN\` — https://vercel.com/account/tokens"
+              echo "- \`VERCEL_ORG_ID\` — from \`.vercel/project.json\` after \`vercel link\`"
+              echo "- \`VERCEL_PROJECT_ID\` — from the same file"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Vercel secrets missing — deploy skipped (not a failure)."
+          fi
+
+      - name: Install dependencies
+        if: steps.guard.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Deploy to Vercel (production)
+        if: steps.guard.outputs.ready == 'true'
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          url=$(npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --cwd apps/web)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
+          {
+            echo "### Website deployment"
+            echo
+            echo "- Production URL: $url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test deployed health endpoint
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
           for i in $(seq 1 10); do
-            if curl -fsS "${NEXT_PUBLIC_SITE_URL:-https://rjnxgamingesports.com}/api/health"; then
+            if body=$(curl -fsS "$DEPLOY_URL/api/health"); then
+              echo "$body"
+              echo "$body" | grep -q '"service":"rjnx-web"' || { echo "::error::health endpoint did not identify as rjnx-web"; exit 1; }
+              if echo "$body" | grep -q '"status":"ok"'; then
+                echo "Database reachable — deployment healthy."
+              else
+                echo "::warning::Site is deployed but reports a degraded database. Configure SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_* in the Vercel project settings."
+              fi
               exit 0
             fi
             sleep 6
           done
-          echo "::warning::Health endpoint did not respond yet (DNS or deployment propagation)."
-        env:
-          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-        continue-on-error: true
+          echo "::error::$DEPLOY_URL/api/health did not respond after 60s"
+          exit 1

@@ -12,7 +12,10 @@
     "doctor": "npx --yes expo-doctor",
     "android:apk": "eas build -p android --profile production-apk",
     "android:aab": "eas build -p android --profile production",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "android:sign": "node scripts/configure-android-signing.mjs",
+    "android:verify": "node scripts/verify-android-project.mjs",
+    "android:sdk": "node scripts/android-sdk-requirements.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

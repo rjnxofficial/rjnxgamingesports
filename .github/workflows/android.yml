@@ -1,5 +1,9 @@
 name: Android App
 
+# Builds a real release APK + AAB with the Android SDK and Gradle.
+# Production signing is used when the keystore secrets exist; otherwise the
+# build is signed with the Expo debug keystore so QA can still install it.
+
 on:
   push:
     branches: [main]
@@ -17,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: "EAS build profile (optional — leave empty to build locally with Gradle)"
+        description: "Optional EAS profile (leave empty to build locally with Gradle)"
         required: false
         default: ""
         type: choice
@@ -29,18 +33,20 @@ concurrency:
 
 env:
   EXPO_NO_TELEMETRY: "1"
+  CI: "1"
+  EXPO_METRO_MAX_WORKERS: "4"
 
 jobs:
   quality:
-    name: Typecheck mobile app
+    name: Typecheck · bundle check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -48,7 +54,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck --workspace @rjnx/mobile
 
-      - name: Bundle check (Metro export)
+      - name: Metro bundle check
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
@@ -56,38 +62,80 @@ jobs:
         run: npx expo export --platform android --output-dir /tmp/expo-bundle --clear
         working-directory: apps/mobile
 
-  build-apk:
-    name: Build release APK + AAB (Gradle)
+  build:
+    name: Release APK + AAB
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
+      EXPO_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Resolve Android SDK location
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          if [ -z "${SDK:-}" ] || [ ! -d "$SDK" ]; then
+            echo "::error::No Android SDK on this runner (ANDROID_SDK_ROOT/ANDROID_HOME unset)"
+            exit 1
+          fi
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=${JAVA_HOME:-}"
+          java -version
+          command -v sdkmanager
+          ls "$SDK"
+          echo "sdk=$SDK"
 
       - run: npm ci
 
       - name: Expo prebuild (Android project)
         working-directory: apps/mobile
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
-          EXPO_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
         run: npx expo prebuild -p android --no-install
 
-      - name: Configure release signing
+      # Install exactly the platform / build-tools / NDK the generated project
+      # needs. The requirements come from the React Native version catalog that
+      # Expo wires into Gradle, so they never drift from the build. sdkmanager
+      # ships with the runner image, so no third-party SDK action is involved.
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(node apps/mobile/scripts/android-sdk-requirements.mjs --print-packages)
+          echo "required: ${packages[*]}"
+          sdkmanager --list_installed | sed -n '1,25p'
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          missing=()
+          while IFS= read -r pkg; do
+            if grep -qF "$pkg" <<< "$(sdkmanager --list_installed)"; then
+              echo "already installed: $pkg"
+            else
+              missing+=("$pkg")
+            fi
+          done < <(printf '%s\n' "${packages[@]}")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "installing: ${missing[*]}"
+            sdkmanager "${missing[@]}"
+          fi
+
+      - name: Verify Android SDK
+        run: node apps/mobile/scripts/android-sdk-requirements.mjs --check
+
+      - name: Configure signing (production key, or debug fallback)
         working-directory: apps/mobile
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -95,33 +143,66 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/release.keystore
-            export ANDROID_KEYSTORE_PATH="$PWD/android/release.keystore"
-          fi
+          set -euo pipefail
           node scripts/configure-android-signing.mjs
+          node scripts/verify-android-project.mjs
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "SIGNING_MODE=production" >> "$GITHUB_ENV"
+          else
+            echo "SIGNING_MODE=debug-fallback" >> "$GITHUB_ENV"
+          fi
 
-      - name: Build APK
+      - name: Build release APK
         working-directory: apps/mobile/android
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Build AAB (Play Store)
+      - name: Build release AAB
         working-directory: apps/mobile/android
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 
+      - name: Verify build outputs
+        working-directory: apps/mobile/android
+        run: |
+          set -euo pipefail
+          ls -lh app/build/outputs/apk/release/ app/build/outputs/bundle/release/
+          test -n "$(ls app/build/outputs/apk/release/*.apk 2>/dev/null)" || { echo "::error::APK not produced"; exit 1; }
+          test -n "$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null)" || { echo "::error::AAB not produced"; exit 1; }
+
+      - name: Name artifacts
+        working-directory: apps/mobile/android
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('../../package.json').version")
+          mkdir -p /tmp/rjnx-out
+          cp app/build/outputs/apk/release/*.apk "/tmp/rjnx-out/rjnx-esports-${VERSION}-${SIGNING_MODE}.apk"
+          cp app/build/outputs/bundle/release/*.aab "/tmp/rjnx-out/rjnx-esports-${VERSION}-${SIGNING_MODE}.aab"
+          ls -lh /tmp/rjnx-out
+          {
+            echo "### Android build"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Signing | ${SIGNING_MODE} |"
+            echo "| Version | ${VERSION} |"
+            echo "| APK | $(basename /tmp/rjnx-out/*.apk) |"
+            echo "| AAB | $(basename /tmp/rjnx-out/*.aab) |"
+            echo
+            echo "Download both files from the run's **Artifacts** section."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rjnx-esports-apk
-          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          path: /tmp/rjnx-out/*.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload AAB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rjnx-esports-aab
-          path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
+          path: /tmp/rjnx-out/*.aab
           if-no-files-found: error
           retention-days: 30
 
@@ -132,16 +213,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
 
-      - uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@9
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}

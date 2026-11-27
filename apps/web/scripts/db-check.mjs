@@ -65,7 +65,52 @@ async function main() {
     if (unprotected.length) console.log("  ⚠ no RLS:", unprotected.map((row) => row.table).join(", "));
   }
 
+  const { rows: policies } = await client
+    .query(
+      `select tablename, count(*)::int as policies
+         from pg_policies where schemaname = 'rjnx' group by tablename order by 1`,
+    )
+    .catch(() => ({ rows: [] }));
+  if (policies.length) {
+    console.log(`\nPolicies: ${policies.length} tables policed`);
+    const withoutPolicies = rls
+      .map((row) => row.table)
+      .filter((table) => !policies.some((row) => row.tablename === table));
+    if (withoutPolicies.length) console.log("  ⚠ no policy:", withoutPolicies.join(", "));
+  }
+
+  const { rows: rpcs } = await client
+    .query(
+      `select p.proname as name,
+              pg_get_userbyid(p.proowner) as owner,
+              coalesce(array_to_string(p.proacl, ', '), 'default') as acl
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'rjnx' and p.prokind = 'f' order by 1`,
+    )
+    .catch(() => ({ rows: [] }));
+  if (rpcs.length) {
+    console.log(`\nFunctions (${rpcs.length}):`);
+    for (const row of rpcs) {
+      const anon = /anon=/.test(row.acl);
+      const auth = /authenticated=/.test(row.acl);
+      const exposure = anon ? "anon+auth" : auth ? "authenticated" : "owner-only";
+      console.log(`  · ${row.name} — ${exposure}`);
+    }
+    const ownerOnly = rpcs.filter((row) => !/anon=|authenticated=/.test(row.acl));
+    if (ownerOnly.length) {
+      console.log(`  note: ${ownerOnly.length} function(s) are not exposed to API clients (maintenance routines).`);
+    }
+  }
+
+  // Fail loudly when the target database is behind the local migrations so a
+  // workflow can never report success while leaving new migrations unapplied.
+  const pending = localFiles.filter((file) => !appliedSet.has(file));
   await client.end();
+  if (pending.length) {
+    console.error(`\n✗ ${pending.length} migration(s) NOT applied: ${pending.join(", ")}`);
+    process.exit(2);
+  }
+  console.log("\n✓ database is up to date with supabase/migrations");
 }
 
 main().catch((error) => {

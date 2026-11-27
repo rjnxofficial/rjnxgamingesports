@@ -17,18 +17,40 @@ npm run mobile            # Expo dev server; press "a" for an Android device/emu
 
 ## 2. Build an APK without EAS (GitHub Actions)
 
-`.github/workflows/android.yml` → **Build release APK + AAB (Gradle)** does:
+`.github/workflows/android.yml` → **Release APK + AAB** does:
 
-1. `npm ci`, Java 17, Android SDK
-2. `npx expo prebuild -p android --no-install`
-3. `node scripts/configure-android-signing.mjs` (adds the release keystore when
-   the secrets exist)
-4. `./gradlew assembleRelease` → `rjnx-esports-apk` artifact
-5. `./gradlew bundleRelease` → `rjnx-esports-aab` artifact (Play upload)
+1. `npm ci`, Node 24, JDK 17 (Temurin)
+2. points Gradle at the Android SDK that ships with the runner
+   (`ANDROID_SDK_ROOT`), then installs the exact packages listed by
+   `node scripts/android-sdk-requirements.mjs` (currently
+   `platform-tools`, `platforms;android-36`, `build-tools;36.0.0`,
+   `ndk;27.1.12297006` — read from the React Native version catalog, so it
+   tracks `compileSdk` instead of hard-coding it)
+3. `npx expo prebuild -p android --no-install`
+4. `node scripts/configure-android-signing.mjs` (adds the release keystore when
+   the secrets exist) and `node scripts/verify-android-project.mjs`
+5. `./gradlew assembleRelease --no-daemon` → `rjnx-esports-apk` artifact
+6. `./gradlew bundleRelease --no-daemon` → `rjnx-esports-aab` artifact (Play upload)
 
-Download from the workflow run → *Artifacts*. Install with
-`adb install rjnx-esports.apk` (enable “install unknown apps” when installing
-from the device).
+Both artifacts are named `rjnx-esports-<version>-<signing-mode>.{apk,aab}`, so a
+debug-signed CI build can never be mistaken for a Play-ready one. Download from
+the workflow run → *Artifacts*. Install with
+`adb install rjnx-esports-1.0.0-production.apk` (enable “install unknown apps”
+when installing from the device).
+
+### SDK versions
+
+| Component | Version | Source |
+| --- | --- | --- |
+| compileSdk / targetSdk | 36 / 36 | `react-native/gradle/libs.versions.toml` (Expo `expoLibs` catalog) |
+| minSdk | 24 | same catalog |
+| Build tools | 36.0.0 | same catalog |
+| NDK | 27.1.12297006 | same catalog |
+| Gradle | 8.14.3 (wrapper) | `android/gradle/wrapper` |
+| JDK | 17 | `actions/setup-java@v6` |
+
+Run `npm run android:sdk -w @rjnx/mobile` to print the required SDK packages and
+`npm run android:sdk -w @rjnx/mobile -- --check` to verify an installed SDK.
 
 ### Signing secrets
 
@@ -53,8 +75,11 @@ passwords. `.gitignore` covers the files; only the CI secrets hold the values.
 Losing this keystore means you cannot publish updates to the same Play listing —
 back it up.
 
-Without signing secrets the workflow still produces an installable APK, signed
-with the debug key. That build is fine for testers, not for the Play Store.
+Without signing secrets the workflow still produces an installable APK + AAB,
+signed with the debug key, and logs an explicit
+`[signing] no keystore provided — release build will be signed with the debug key`
+line. Those files are fine for testers, not for the Play Store. Nothing is
+uploaded to Play automatically: publishing stays manual.
 
 ## 3. Build with EAS (optional)
 
@@ -86,7 +111,7 @@ From CI: *Actions → Android App → Run workflow* → pick a profile. Requires
 | --- | --- |
 | Application ID | `com.devkazzu.rjnxgamingesports` |
 | Version name / code | `1.0.0` / `1` (`android.versionCode`, bump per upload or let EAS `autoIncrement`) |
-| Min / target SDK | Expo 54 defaults (24 / 35) |
+| Min / target SDK | 24 / 36 |
 | Permissions | `INTERNET`, `POST_NOTIFICATIONS`, `VIBRATE` |
 | App signing | Play App Signing (upload key = your keystore) |
 | Category | Games → eSports |

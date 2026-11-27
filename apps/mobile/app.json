@@ -13,7 +13,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#05050A"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.devkazzu.rjnxgamingesports",
       "versionCode": 1,
@@ -21,7 +23,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#05050A"
       },
-      "permissions": ["INTERNET", "POST_NOTIFICATIONS", "VIBRATE"],
+      "permissions": [
+        "INTERNET",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize"
     },
@@ -34,6 +40,7 @@
       "output": "single"
     },
     "plugins": [
+      "./plugins/with-brand-fonts",
       "expo-router",
       "expo-secure-store",
       [
