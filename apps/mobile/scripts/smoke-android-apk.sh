@@ -80,7 +80,7 @@ if [ -n "$FATALS" ]; then
   echo "$FATALS" | tee -a "$REPORT"
   echo "FAILED: native/Java fatal exception detected" | tee -a "$REPORT"
   # Surface the first fatal line itself as the annotation message.
-  annotate_error "$(printf '%s' "$FATALS" | head -3 | tr '\n' ' ' | cut -c1-800)"
+  annotate_error "$(printf '%s' "$FATALS" | head -4 | tr '\n' '|' | cut -c1-1500)"
   STATUS=1
 fi
 
@@ -88,7 +88,12 @@ if grep -q "ui-ready" "$LOG"; then
   echo "PASS: JS reached ui-ready" | tee -a "$REPORT"
 elif [ "$MODE" = "configured" ]; then
   echo "FAILED: JS never reported ui-ready" | tee -a "$REPORT"
-  annotate_error "JS bundle never reached boot:ui-ready — last JS lines: $(grep -E 'ReactNativeJS' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-700)"
+  # The full React/JS error block is the only way to name the failing route.
+  annotate_error "JS never reached boot:ui-ready"
+  js_block=$(grep -E 'ReactNativeJS' "$LOG" | tail -40 | sed 's/^.*ReactNativeJS([^)]*): //' | tr '\n' '|' | cut -c1-4000)
+  if [ -n "$js_block" ]; then echo "::error title=rjnx smoke JS errors::$js_block"; fi
+  warn_block=$(grep -E 'W/ReactNativeJS|E/ReactNativeJS|Warning:' "$LOG" | head -20 | sed 's/^.*ReactNativeJS([^)]*): //' | tr '\n' '|' | cut -c1-2000)
+  if [ -n "$warn_block" ]; then echo "::warning title=rjnx smoke JS warnings::$warn_block"; fi
   STATUS=1
 else
   echo "NOTE: ui-ready not observed (expected for the unconfigured build)" | tee -a "$REPORT"

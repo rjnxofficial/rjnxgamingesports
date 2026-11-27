@@ -26,6 +26,11 @@ on:
         default: ""
         type: choice
         options: ["", "preview", "production-apk", "production"]
+      smoke_only:
+        description: "Skip the Gradle build and smoke-test the newest successful APK artifact"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: android-${{ github.ref }}
@@ -70,6 +75,7 @@ jobs:
   build:
     name: Release APK + AAB
     needs: quality
+    if: github.event.inputs.smoke_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -262,7 +268,8 @@ jobs:
   # downloading artifacts.
   smoke:
     name: Startup smoke test (emulator)
-    needs: build
+    needs: [build]
+    if: always() && (needs.build.result == 'success' || github.event.inputs.smoke_only == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -299,9 +306,24 @@ jobs:
 
       - name: Download the built APK
         uses: actions/download-artifact@v7
+        if: needs.build.result == 'success'
         with:
           name: rjnx-esports-apk
           path: /tmp/rjnx-apk
+
+      # smoke_only runs reuse the newest successful APK so a logcat iteration
+      # takes minutes instead of rebuilding Gradle from scratch.
+      - name: Download the newest successful APK (smoke_only)
+        if: needs.build.result != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow android.yml --status success --limit 20 \
+            --json databaseId,headBranch --jq --arg branch "$GITHUB_REF_NAME" '[.[] | select(.headBranch == $branch)][0].databaseId')
+          echo "reusing artifacts from run $run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n rjnx-esports-apk -D /tmp/rjnx-apk
+          find /tmp/rjnx-apk -type f | head
 
       - name: Run the app on an emulator
         uses: reactivecircus/android-emulator-runner@v2
