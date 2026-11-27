@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import { BRAND } from "@rjnx/shared";
-import { env } from "@/lib/env";
+import { optionalEnv } from "@/lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(env.siteUrl),
+  metadataBase: new URL(optionalEnv().siteUrl),
   title: {
     default: `${BRAND.name} — ${BRAND.tagline}`,
     template: `%s · ${BRAND.shortName} GAMING ESPORTS`,

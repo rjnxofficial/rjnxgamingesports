@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { dataClient } from "@/lib/supabase/safe";
-import { env } from "@/lib/env";
+import { optionalEnv } from "@/lib/env";
 
 export const revalidate = 3600;
 
@@ -23,7 +23,7 @@ const STATIC_PATHS = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = env.siteUrl.replace(/\/$/, "");
+  const base = optionalEnv().siteUrl.replace(/\/$/, "");
   const entries: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
     url: `${base}${path}`,
     lastModified: new Date(),

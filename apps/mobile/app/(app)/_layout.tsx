@@ -7,6 +7,8 @@ import { registerForPushNotifications } from "@/lib/notifications";
 import { Loader } from "@/components/ui";
 import { OfflineBanner } from "@/components/offline-banner";
 import { theme } from "@/lib/theme";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { log } from "@/lib/runtime";
 
 function Icon({ name, color }: { name: "home" | "trophy" | "matches" | "leaderboard" | "profile"; color: string }) {
   const paths: Record<typeof name, string> = {
@@ -27,7 +29,10 @@ export default function AppLayout() {
   const { ready, session, user } = useAuth();
 
   React.useEffect(() => {
-    if (user) void registerForPushNotifications(user.id);
+    if (!user) return;
+    // Push registration is best-effort: a device without Play services or a
+    // denied permission must never take the app down.
+    registerForPushNotifications(user.id).catch((error) => log("warn", "push registration failed", error));
   }, [user]);
 
   if (!ready) {
@@ -41,7 +46,7 @@ export default function AppLayout() {
   if (!session) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <>
+    <ErrorBoundary scope="tabs">
       <OfflineBanner />
       <Tabs
         screenOptions={{
@@ -92,6 +97,6 @@ export default function AppLayout() {
         <Tabs.Screen name="settings" options={{ href: null, title: "Settings" }} />
         <Tabs.Screen name="support" options={{ href: null, title: "Support" }} />
       </Tabs>
-    </>
+    </ErrorBoundary>
   );
 }

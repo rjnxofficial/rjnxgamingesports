@@ -4,11 +4,26 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 
+import { log, readRuntimeConfig } from "./runtime";
+
 export const RJNX_SCHEMA = "rjnx";
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://nuckewrlcjphjmnfgilo.supabase.co";
-const SUPABASE_ANON_KEY =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj";
+/**
+ * Configuration comes from the build environment only (`EXPO_PUBLIC_*`).
+ * There is deliberately no hard-coded fallback project: a bundle built without
+ * configuration must fail loudly at startup diagnostics instead of silently
+ * talking to a guessed project.
+ */
+const runtimeConfig = readRuntimeConfig();
+const SUPABASE_URL = runtimeConfig.supabaseUrl;
+const SUPABASE_ANON_KEY = runtimeConfig.supabaseKey;
+
+if (runtimeConfig.configError) {
+  log("error", `invalid Supabase configuration — ${runtimeConfig.configError}`);
+}
+
+/** True when the bundle has a usable Supabase configuration. */
+export const hasSupabaseConfig = runtimeConfig.configError === null;
 
 /**
  * Secure session persistence: tokens go to the Android Keystore via
@@ -27,10 +42,16 @@ const SecureAdapter = {
     try {
       const secure = await SecureStore.getItemAsync(key);
       if (secure !== null) return secure;
-    } catch {
+    } catch (error) {
       // Keystore unavailable on this device — use the AsyncStorage copy.
+      log("warn", "secure-store read failed, falling back to AsyncStorage", error);
     }
-    return AsyncStorage.getItem(key);
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch (error) {
+      log("warn", "AsyncStorage read failed", error);
+      return null;
+    }
   },
   setItem: async (key: string, value: string): Promise<void> => {
     if (value.length <= SECURE_STORE_LIMIT) {
@@ -38,8 +59,8 @@ const SecureAdapter = {
         await SecureStore.setItemAsync(key, value);
         await AsyncStorage.removeItem(key);
         return;
-      } catch {
-        // fall through to AsyncStorage
+      } catch (error) {
+        log("warn", "secure-store write failed, falling back to AsyncStorage", error);
       }
     }
     try {
@@ -59,7 +80,10 @@ const SecureAdapter = {
   },
 };
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// The auth storage adapters below still work when the URL is empty (they are
+// only touched on a session read), so the client is always constructible and the
+// UI can render a configuration error instead of crashing at import time.
+export const supabase = createClient(SUPABASE_URL || "https://unconfigured.supabase.co", SUPABASE_ANON_KEY || "unconfigured", {
   db: { schema: RJNX_SCHEMA },
   auth: {
     storage: SecureAdapter,
@@ -79,3 +103,5 @@ AppState.addEventListener("change", (state) => {
 });
 
 export type MobileSupabaseClient = SupabaseClient<any, "rjnx", any>;
+
+log("info", `supabase client created for ${SUPABASE_URL || "(no url)"} · config=${hasSupabaseConfig ? "ok" : "invalid"}`);

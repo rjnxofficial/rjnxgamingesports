@@ -9,6 +9,12 @@ import { RJNX_SCHEMA } from "./client";
  * The session is read-only inside Server Components; cookie writes are handled
  * by middleware.ts.
  */
+export function SupabaseConfigError() {
+  return new Error(
+    "Supabase is not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+  );
+}
+
 export async function createServerSupabase(): Promise<RjnxClient> {
   const cookieStore = await cookies();
 

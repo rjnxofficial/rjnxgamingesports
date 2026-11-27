@@ -12,8 +12,9 @@ export async function dataClient(): Promise<RjnxClient> {
     return await createServerSupabase();
   } catch {
     const { createClient } = await import("@supabase/supabase-js");
-    const { env } = await import("@/lib/env");
-    return createClient(env.supabaseUrl, env.supabaseAnonKey, {
+    const { optionalEnv } = await import("@/lib/env");
+    const config = optionalEnv();
+    return createClient(config.supabaseUrl, config.supabaseAnonKey, {
       db: { schema: "rjnx" },
       auth: { persistSession: false, autoRefreshToken: false },
     }) as unknown as RjnxClient;

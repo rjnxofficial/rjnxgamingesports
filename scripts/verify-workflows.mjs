@@ -27,9 +27,18 @@ const MINIMUM_MAJOR = {
   "actions/cache": 5,
   "android-actions/setup-android": 4,
   "expo/expo-github-action": 9,
+  "reactivecircus/android-emulator-runner": 2,
 };
 
-const APPROVED_OWNERS = ["actions", "android-actions", "expo", "docker"];
+const APPROVED_OWNERS = [
+  "actions",
+  "android-actions",
+  "expo",
+  "docker",
+  // Emulator runner: the only maintained way to boot an AVD in CI and actually
+  // exercise the built APK (React Native builds cannot be verified otherwise).
+  "reactivecircus",
+];
 
 const failures = [];
 const files = readdirSync(workflowDir).filter((file) => /\.ya?ml$/.test(file));

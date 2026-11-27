@@ -62,6 +62,29 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
         run: npm run build --workspace @rjnx/web
 
+      - name: Smoke test the production server
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -uo pipefail
+          ( cd apps/web && npx next start -p 3111 ) &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3111/api/health > /dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          if node apps/web/scripts/smoke.mjs http://127.0.0.1:3111; then
+            echo "smoke: full pass (database reachable)"
+          else
+            echo "::error::smoke test failed"
+            node apps/web/scripts/smoke.mjs http://127.0.0.1:3111 --allow-degraded-db || true
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          kill "$SERVER_PID" 2>/dev/null || true
+
       - name: Upload build output
         uses: actions/upload-artifact@v7
         with:
@@ -128,7 +151,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          url=$(npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --cwd apps/web)
+          url=$(npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" --cwd .)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed to $url"
           {
