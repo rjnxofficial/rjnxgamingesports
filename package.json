@@ -20,7 +20,8 @@
     "mobile:android": "npm run android -w @rjnx/mobile",
     "db:push": "npm run db:push -w @rjnx/web",
     "db:check": "npm run db:check -w @rjnx/web",
-    "verify:workflows": "node scripts/verify-workflows.mjs"
+    "verify:workflows": "node scripts/verify-workflows.mjs",
+    "admin:audit": "npm run admin:audit -w @rjnx/web"
   },
   "engines": {
     "node": ">=20.9.0"

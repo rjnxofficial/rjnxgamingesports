@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:push": "node scripts/db-setup.mjs",
-    "db:check": "node scripts/db-check.mjs"
+    "db:check": "node scripts/db-check.mjs",
+    "admin:audit": "node scripts/admin-audit.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "5.9.2",

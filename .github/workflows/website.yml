@@ -55,6 +55,9 @@ jobs:
       - name: Verify Supabase schema (static)
         run: node apps/web/scripts/verify-supabase.mjs
 
+      - name: Admin Command Center audit
+        run: node apps/web/scripts/admin-audit.mjs --verbose
+
       - name: Production build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}

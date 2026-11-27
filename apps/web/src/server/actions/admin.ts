@@ -546,6 +546,8 @@ export async function recalculateLeaderboardAction(
     if (adminError) return { ok: false, error: adminError.message };
   }
 
+  await writeAudit(session.supabase, session.user.id, "leaderboard.recalculate", "tournament", tournamentId, null);
+
   revalidatePath("/admin/leaderboard");
   revalidatePath("/leaderboard");
   return { ok: true, data: null };
@@ -610,6 +612,11 @@ export async function grantRoleAction(
   const parsed = roleGrantSchema.safeParse({ user_id: str(formData, "user_id"), role: str(formData, "role") });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role" };
   if (parsed.data.role === "player") return { ok: false, error: "Every account already has the player role." };
+  // A super admin can never grant themselves a role: promotions always come
+  // from another super admin, and the identity is the server session.
+  if (parsed.data.user_id === session.user.id) {
+    return { ok: false, error: "You cannot change your own roles. Ask another super admin." };
+  }
 
   const { error } = await session.supabase
     .from("user_roles")
@@ -644,6 +651,9 @@ export async function revokeRoleAction(
 
   const userId = str(formData, "user_id");
   const role = str(formData, "role");
+  if (userId === session.user.id) {
+    return { ok: false, error: "You cannot change your own roles. Ask another super admin." };
+  }
   if (role === "super_admin") {
     const { count } = await session.supabase
       .from("user_roles")
@@ -763,6 +773,10 @@ export async function saveBannerAction(
     : await session.supabase.from("banners").insert(payload);
   if (error) return { ok: false, error: error.message };
 
+  await writeAudit(session.supabase, session.user.id, id ? "banner.update" : "banner.create", "banner", id || null, {
+    title: payload.title,
+  });
+
   revalidatePath("/admin/banners");
   revalidatePath("/");
   return { ok: true, data: null };
@@ -777,6 +791,7 @@ export async function deleteBannerAction(
   const id = str(formData, "id");
   const { error } = await session.supabase.from("banners").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
+  await writeAudit(session.supabase, session.user.id, "banner.delete", "banner", id, null);
   revalidatePath("/admin/banners");
   revalidatePath("/");
   return { ok: true, data: null };
@@ -933,6 +948,10 @@ export async function replyTicketAction(
     "/dashboard/support",
   );
 
+  await writeAudit(session.supabase, session.user.id, "support.reply", "support_ticket", parsed.data.ticket_id, {
+    status: parsed.data.status,
+  });
+
   revalidatePath("/admin/support");
   return { ok: true, data: null };
 }
@@ -978,6 +997,11 @@ export async function saveScoringRuleAction(
     ? await session.supabase.from("scoring_rules").update(payload).eq("id", id)
     : await session.supabase.from("scoring_rules").insert(payload);
   if (error) return { ok: false, error: error.message };
+
+  await writeAudit(session.supabase, session.user.id, id ? "scoring_rule.update" : "scoring_rule.create", "scoring_rule", id || null, {
+    name: payload.name,
+    is_default: payload.is_default,
+  });
 
   revalidatePath("/admin/leaderboard");
   return { ok: true, data: null };
