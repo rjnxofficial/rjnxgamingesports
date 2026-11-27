@@ -10,16 +10,25 @@ set -uo pipefail
 APK="${1:?usage: smoke-android-apk.sh <apk> [package]}"
 PACKAGE="${2:-com.devkazzu.rjnxgamingesports}"
 RESULT_DIR="${RESULT_DIR:-/tmp/rjnx-smoke}"
-mkdir -p "$RESULT_DIR"
+mkdir -p "$RESULT_DIR" || { echo "::error title=smoke::cannot create $RESULT_DIR"; exit 4; }
 LOG="$RESULT_DIR/logcat.txt"
 REPORT="$RESULT_DIR/report.txt"
 
-section() { printf '\n===== %s =====\n' "$1"; }
+# Every phase is announced with a GitHub annotation so the outcome is readable
+# from the checks API even when the step log is not accessible.
+section() {
+  printf '\n===== %s =====\n' "$1"
+  printf '%s\n' "$1" >> "$REPORT"
+  echo "::notice title=rjnx smoke::$1"
+}
+annotate_error() { echo "::error title=rjnx smoke::$1"; }
+trap 'code=$?; echo "exit_code=$code" >> "$REPORT"; if [ $code -ne 0 ]; then annotate_error "smoke script failed (exit $code)"; fi' EXIT
 
 section "waiting for emulator"
 adb wait-for-device
-for _ in $(seq 1 120); do
+for _ in $(seq 1 90); do
   booted=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+  [ -z "$booted" ] && booted=0
   [ "$booted" = "1" ] && break
   sleep 2
 done
@@ -31,6 +40,7 @@ adb shell settings put global animator_duration_scale 0 || true
 
 section "install"
 if ! adb install -r -t "$APK" 2>&1 | tee -a "$REPORT"; then
+  annotate_error "apk install failed"
   echo "FAILED: apk could not be installed"; exit 3
 fi
 adb shell pm list packages | grep -F "$PACKAGE" || { echo "FAILED: package not installed"; exit 3; }
@@ -41,7 +51,9 @@ echo "SMOKE_MODE=$MODE" >> "$REPORT"
 section "launch (cold start)"
 adb logcat -c || true
 adb shell am force-stop "$PACKAGE" || true
-adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >> "$REPORT" 2>&1
+if ! adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >> "$REPORT" 2>&1; then
+  annotate_error "launch intent failed (package not launchable)"
+fi
 sleep 25
 
 section "collect logcat"
@@ -53,6 +65,7 @@ PID=$(adb shell pidof "$PACKAGE" | tr -d '\r')
 echo "pid=${PID:-none}" >> "$REPORT"
 if [ -z "$PID" ]; then
   echo "FAILED: process is not running (startup crash)" | tee -a "$REPORT"
+  annotate_error "process died during startup (startup crash)"
   STATUS=1
 else
   STATUS=0
@@ -66,6 +79,8 @@ FATALS=$(grep -E "FATAL EXCEPTION|AndroidRuntime: (java|android|com)\." "$LOG" |
 if [ -n "$FATALS" ]; then
   echo "$FATALS" | tee -a "$REPORT"
   echo "FAILED: native/Java fatal exception detected" | tee -a "$REPORT"
+  # Surface the first fatal line itself as the annotation message.
+  annotate_error "$(printf '%s' "$FATALS" | head -3 | tr '\n' ' ' | cut -c1-800)"
   STATUS=1
 fi
 
@@ -73,6 +88,7 @@ if grep -q "ui-ready" "$LOG"; then
   echo "PASS: JS reached ui-ready" | tee -a "$REPORT"
 elif [ "$MODE" = "configured" ]; then
   echo "FAILED: JS never reported ui-ready" | tee -a "$REPORT"
+  annotate_error "JS bundle never reached boot:ui-ready — last JS lines: $(grep -E 'ReactNativeJS' "$LOG" | tail -3 | tr '\n' ' ' | cut -c1-700)"
   STATUS=1
 else
   echo "NOTE: ui-ready not observed (expected for the unconfigured build)" | tee -a "$REPORT"
@@ -87,5 +103,10 @@ adb shell uiautomator dump /sdcard/rjnx-ui.xml > /dev/null 2>&1 && \
   adb shell cat /sdcard/rjnx-ui.xml 2>/dev/null | tr '>' '>\n' | grep -oE 'text="[^"]+"' | head -30 | tee -a "$REPORT"
 
 section "result"
-if [ "$STATUS" -eq 0 ]; then echo "SMOKE TEST PASSED"; else echo "SMOKE TEST FAILED"; fi
+if [ "$STATUS" -eq 0 ]; then
+  echo "SMOKE TEST PASSED"
+  echo "::notice title=rjnx smoke::PASSED — app started, no fatal exception, JS reached ui-ready"
+else
+  echo "SMOKE TEST FAILED"
+fi
 exit "$STATUS"

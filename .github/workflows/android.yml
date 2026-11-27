@@ -310,9 +310,13 @@ jobs:
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 3072
           script: |
             set -uo pipefail
+            echo "::notice title=rjnx smoke::emulator up — starting checks"
+            adb devices
             APK=$(ls /tmp/rjnx-apk/*.apk | head -1)
+            if [ -z "${APK:-}" ]; then echo "::error title=rjnx smoke::no APK downloaded"; exit 1; fi
+            ls -lh "$APK"
             echo "testing $APK"
-            bash apps/mobile/scripts/smoke-android-apk.sh "$APK"
+            bash apps/mobile/scripts/smoke-android-apk.sh "$APK" || exit $?
 
       - name: Publish logcat summary
         if: always()
