@@ -69,6 +69,26 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
         run: |
           set -uo pipefail
+          # Emit one annotation per missing object so the failure mode is visible
+          # in the check-run API/summary without downloading artifacts or logs.
+          NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
+          NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+            node apps/web/scripts/db-status.mjs --json > /tmp/db-status.json 2>/tmp/db-status.err || true
+          node -e '
+            const fs = require("fs");
+            let data;
+            try { data = JSON.parse(fs.readFileSync("/tmp/db-status.json", "utf8")); } catch { process.exit(0); }
+            for (const row of [...data.tables, ...data.views]) {
+              if (row.status !== "ok") {
+                console.log(`::error title=Supabase ${row.table} (${row.status})::${(row.detail || "not reachable with the publishable key").replace(/[\r\n]+/g, " ")}`);
+              }
+            }
+            for (const row of data.rpcs) {
+              if (row.status !== "ok" && row.status !== "deployed (permission denied)") {
+                console.log(`::error title=Supabase RPC ${row.name} (${row.status})::${(row.detail || "function not deployed").replace(/[\r\n]+/g, " ")}`);
+              }
+            }
+          '
           output=$(node apps/web/scripts/db-status.mjs 2>&1) && status=0 || status=$?
           echo "$output"
           {
@@ -95,11 +115,13 @@ jobs:
             if curl -fsS http://127.0.0.1:3111/api/health > /dev/null 2>&1; then break; fi
             sleep 2
           done
-          if node apps/web/scripts/smoke.mjs http://127.0.0.1:3111; then
+          if out=$(node apps/web/scripts/smoke.mjs http://127.0.0.1:3111 2>&1); then
+            echo "$out"
             echo "smoke: full pass (database reachable)"
           else
-            echo "::error::smoke test failed"
-            node apps/web/scripts/smoke.mjs http://127.0.0.1:3111 --allow-degraded-db || true
+            echo "$out"
+            # One annotation per failing assertion (readable from the checks API).
+            echo "$out" | sed -n 's/^  • /::error title=web smoke::/p'
             kill "$SERVER_PID" 2>/dev/null || true
             exit 1
           fi
