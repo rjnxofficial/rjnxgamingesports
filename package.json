@@ -1,0 +1,27 @@
+{
+  "name": "rjnx-gaming-esports",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RJNX GAMING ESPORTS \u2014 tournament platform (web + Android). Developed by DEVKAZZU.",
+  "workspaces": [
+    "apps/web",
+    "apps/mobile",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @rjnx/web",
+    "build": "npm run build -w @rjnx/web",
+    "start": "npm run start -w @rjnx/web",
+    "lint": "npm run lint -w @rjnx/web",
+    "typecheck": "npm run typecheck -w @rjnx/shared && npm run typecheck -w @rjnx/web && npm run typecheck -w @rjnx/mobile",
+    "test": "npm run test -w @rjnx/shared",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "mobile": "npm run start -w @rjnx/mobile",
+    "mobile:android": "npm run android -w @rjnx/mobile",
+    "db:push": "npm run db:push -w @rjnx/web",
+    "db:check": "npm run db:check -w @rjnx/web"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

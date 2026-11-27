@@ -1,0 +1,44 @@
+{
+  "name": "@rjnx/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RJNX GAMING ESPORTS \u2014 Next.js tournament platform (website + admin command center).",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "db:push": "node scripts/db-setup.mjs",
+    "db:check": "node scripts/db-check.mjs"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "5.9.2",
+    "@rjnx/shared": "*",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.2",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "framer-motion": "12.43.0",
+    "lucide-react": "0.577.0",
+    "next": "15.5.29",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "react-hook-form": "7.64.0",
+    "sonner": "2.0.8",
+    "tailwind-merge": "3.7.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/node": "22.20.7",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "15.5.29",
+    "pg": "8.23.1",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.3"
+  }
+}
