@@ -22,6 +22,7 @@
     "db:check": "npm run db:check -w @rjnx/web",
     "verify:workflows": "node scripts/verify-workflows.mjs",
     "admin:audit": "npm run admin:audit -w @rjnx/web",
+    "verify:routes": "npm run verify:routes -w @rjnx/mobile",
     "verify:react": "npm run verify:react -w @rjnx/mobile",
     "site:audit": "npm run site:audit -w @rjnx/web"
   },
