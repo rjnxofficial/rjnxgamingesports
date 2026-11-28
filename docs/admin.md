@@ -64,6 +64,26 @@ placement/kills and re-verify; the leaderboard recomputes from verified rows onl
 **Suspend a player** → `/admin/users` (super admin) → suspend with a reason. Their session is
 redirected to `/suspended`; writes are blocked by `rjnx.is_active_user()`.
 
+## Reports, exports and the audit gate
+
+* `/admin/reports` aggregates live data for a selectable date range (default: the
+  last 30 days). Every figure comes from the `rjnx` schema — there are no cached
+  or hard-coded numbers.
+* CSV exports: `/admin/reports/export?dataset=<registrations|payments|tournaments|results|users>&from=YYYY-MM-DD&to=YYYY-MM-DD`.
+  The route resolves the session server-side, requires staff, and refuses
+  anonymous requests (the smoke test asserts this).
+* `node apps/web/scripts/admin-audit.mjs` runs in CI and fails the build when an
+  admin page stops reading from the database, an action loses its role guard,
+  a mutation stops writing an audit entry, or an action cannot report failure.
+
+## Database prerequisites
+
+The console talks to the `rjnx` schema, so the Supabase project must expose it
+(Project Settings → API → Exposed schemas → add `rjnx`). Migration `0008` grants
+schema usage, sequence/default privileges and the anon read grants; without the
+dashboard toggle every query fails with `PGRST106: Invalid schema: rjnx` and
+`/api/health` reports `database: "error"`.
+
 ## Payments (optional)
 
 `/admin/reports` shows paid transactions when the module is enabled. Prize
