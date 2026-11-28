@@ -67,6 +67,13 @@ alter role authenticator set pgrst.db_schemas = 'public, graphql_public, rjnx';
 notify pgrst, 'reload config';
 ```
 
+**This is automated.** Migration `0009_expose_schema_via_config.sql` performs the
+two statements above (`ALTER ROLE authenticator`, `NOTIFY pgrst`) whenever it is
+applied, so the migration job fixes the project without a dashboard visit. It is
+idempotent, appends `rjnx` without dropping schemas the instance already
+exposes, and reports a notice instead of aborting when the migration role may not
+alter `authenticator` — in that case use the dashboard toggle or the SQL above.
+
 Migration `0008_expose_schema.sql` grants everything else that is needed
 (schema usage, sequence/default privileges, anon read grants, view grants). Until
 the schema is exposed, every query fails with

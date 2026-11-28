@@ -79,8 +79,10 @@ redirected to `/suspended`; writes are blocked by `rjnx.is_active_user()`.
 ## Database prerequisites
 
 The console talks to the `rjnx` schema, so the Supabase project must expose it
-(Project Settings → API → Exposed schemas → add `rjnx`). Migration `0008` grants
-schema usage, sequence/default privileges and the anon read grants; without the
+(Project Settings → API → Exposed schemas → add `rjnx`). Migration
+`0009_expose_schema_via_config.sql` now performs that same
+`alter role authenticator set pgrst.db_schemas` + `notify pgrst` for you, and
+`0008` grants schema usage, sequence/default privileges and the anon read grants; without the
 dashboard toggle every query fails with `PGRST106: Invalid schema: rjnx` and
 `/api/health` reports `database: "error"`.
 

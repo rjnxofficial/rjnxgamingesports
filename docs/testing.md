@@ -229,7 +229,7 @@ log is attached to the run either way.
 | Five admin mutations had no audit entry | unauditable privileged changes | audit writes for leaderboard recalc, banners, support replies, scoring rules |
 | Reports had no date range and no export | manual SQL for every report | `from`/`to` filters + staff-only CSV export route |
 | `expo-router` treats a route-local `ErrorBoundary` binding as its own boundary | "Cannot read property ErrorBoundary" class of crashes | alias the UI boundary + `verify:routes` CI gate |
-| **`rjnx` schema not exposed in PostgREST** | **every query from web + Android failed (`PGRST106`); the deployed site had no data** | migration `0008` grants + documented dashboard toggle, CI annotation names it |
+| **`rjnx` schema not exposed in PostgREST** | **every query from web + Android failed (`PGRST106`); the deployed site had no data** | migration `0008` grants + `0009` sets `pgrst.db_schemas` and reloads PostgREST automatically; CI annotation names any residual case |
 | `RJNX_SCHEMA` imported from a `"use client"` module into server code | runtime crash "Attempted to call RJNX_SCHEMA() from the server" | moved to `lib/supabase/schema.ts` |
 | Missing `NEXT_PUBLIC_*` env broke the production build | deploy could not be built at all | lazy getters + `optionalEnv()`; build verified with and without env |
 | Release APK could white-screen with no diagnostics | unverifiable startup | runtime diagnostics, error boundaries, splash/font timeouts, emulator smoke job |
