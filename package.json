@@ -15,7 +15,7 @@
     "lint": "npm run lint -w @rjnx/web",
     "typecheck": "npm run typecheck -w @rjnx/shared && npm run typecheck -w @rjnx/web && npm run typecheck -w @rjnx/mobile",
     "test": "npm run test -w @rjnx/shared",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run verify:workflows && npm run verify:routes && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run verify:workflows && npm run verify:routes && npm run verify:react && npm run build",
     "mobile": "npm run start -w @rjnx/mobile",
     "mobile:android": "npm run android -w @rjnx/mobile",
     "db:push": "npm run db:push -w @rjnx/web",
