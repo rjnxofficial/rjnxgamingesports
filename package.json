@@ -21,7 +21,8 @@
     "db:push": "npm run db:push -w @rjnx/web",
     "db:check": "npm run db:check -w @rjnx/web",
     "verify:workflows": "node scripts/verify-workflows.mjs",
-    "admin:audit": "npm run admin:audit -w @rjnx/web"
+    "admin:audit": "npm run admin:audit -w @rjnx/web",
+    "verify:react": "npm run verify:react -w @rjnx/mobile"
   },
   "engines": {
     "node": ">=20.9.0"
