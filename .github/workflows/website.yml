@@ -86,7 +86,7 @@ jobs:
             try { data = JSON.parse(fs.readFileSync("/tmp/db-status.json", "utf8")); } catch { process.exit(0); }
             const notExposed = [...data.tables, ...data.views].filter((r) => r.status === "schema-not-exposed");
             if (notExposed.length) {
-              console.log("::error title=Supabase schema rjnx is not exposed::Project Settings -> API -> Exposed schemas must include rjnx, then reload PostgREST. Every table is unreachable until this is fixed.");
+              console.log("::error title=Supabase schema rjnx is not exposed::Fix: add the DATABASE_URL repository secret so the Database Migrations job applies 0009 (it sets pgrst.db_schemas and reloads PostgREST). Without that secret, set Project Settings -> API -> Exposed schemas to include rjnx manually. Every rjnx table is unreachable until then.");
             } else {
               for (const row of [...data.tables, ...data.views]) {
                 if (row.status !== "ok") {
