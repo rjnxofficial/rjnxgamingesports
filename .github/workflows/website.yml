@@ -58,6 +58,9 @@ jobs:
       - name: Admin Command Center audit
         run: node apps/web/scripts/admin-audit.mjs --verbose
 
+      - name: Website completeness audit
+        run: node apps/web/scripts/site-audit.mjs --verbose
+
       - name: Production build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}

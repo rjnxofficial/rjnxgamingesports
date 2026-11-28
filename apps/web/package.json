@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:push": "node scripts/db-setup.mjs",
     "db:check": "node scripts/db-check.mjs",
-    "admin:audit": "node scripts/admin-audit.mjs"
+    "admin:audit": "node scripts/admin-audit.mjs",
+    "site:audit": "node scripts/site-audit.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "5.9.2",
