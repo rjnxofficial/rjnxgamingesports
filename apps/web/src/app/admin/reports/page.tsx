@@ -10,20 +10,53 @@ import { formatCurrency, formatDate, formatNumber } from "@rjnx/shared";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminReportsPage() {
+/** Inclusive `YYYY-MM-DD` range from the URL, defaulting to the last 30 days. */
+function resolveRange(searchParams: { from?: string; to?: string }) {
+  const iso = (value: string | undefined, fallback: Date) =>
+    value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback.toISOString().slice(0, 10);
+  const today = new Date();
+  const monthAgo = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+  const from = iso(searchParams.from, monthAgo);
+  const to = iso(searchParams.to, today);
+  return {
+    from,
+    to,
+    fromIso: new Date(`${from}T00:00:00.000Z`).toISOString(),
+    toIso: new Date(`${to}T23:59:59.999Z`).toISOString(),
+  };
+}
+
+export default async function AdminReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   const session = await requireStaff("/admin/reports");
   const client = createAdminClient() ?? session.supabase;
+  const range = resolveRange(await searchParams);
 
   const [{ data: statsRaw }, { data: byGame }, { data: byTournament }, { data: payments }] = await Promise.all([
     session.supabase.rpc("admin_stats"),
-    client.from("tournaments").select("game_id, prize_pool, entry_fee, status, game:games(name, short_name)").neq("status", "draft"),
+    client
+      .from("tournaments")
+      .select("game_id, prize_pool, entry_fee, status, game:games(name, short_name)")
+      .neq("status", "draft")
+      .gte("starts_at", range.fromIso)
+      .lte("starts_at", range.toIso),
     client
       .from("tournaments")
       .select("id, name, status, max_slots, prize_pool, entry_fee, starts_at, registrations:tournament_registrations(id, status)")
       .neq("status", "draft")
+      .gte("starts_at", range.fromIso)
+      .lte("starts_at", range.toIso)
       .order("starts_at", { ascending: false })
       .limit(20),
-    client.from("payment_transactions").select("amount, status, created_at").limit(1000),
+    client
+      .from("payment_transactions")
+      .select("amount, status, created_at")
+      .gte("created_at", range.fromIso)
+      .lte("created_at", range.toIso)
+      .limit(1000),
   ]);
 
   const stats = (statsRaw ?? {}) as {
@@ -69,6 +102,47 @@ export default async function AdminReportsPage() {
   return (
     <div className="space-y-6">
       <AdminHeader title="Reports & analytics" subtitle="Live aggregation from the rjnx schema — no cached or hardcoded values." />
+
+      <AdminPanel title="Date range & exports" description={`Showing ${range.from} → ${range.to}. Exports respect this range.`}>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.2em] text-rjnx-muted">
+            From
+            <input
+              type="date"
+              name="from"
+              defaultValue={range.from}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-normal tracking-normal text-white"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.2em] text-rjnx-muted">
+            To
+            <input
+              type="date"
+              name="to"
+              defaultValue={range.to}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-normal tracking-normal text-white"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-lg border border-rjnx-blue/40 bg-rjnx-blue/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-rjnx-blue hover:bg-rjnx-blue/20"
+          >
+            Apply
+          </button>
+        </form>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["registrations", "payments", "tournaments", "results", "users"] as const).map((dataset) => (
+            <Link
+              key={dataset}
+              href={`/admin/reports/export?dataset=${dataset}&from=${range.from}&to=${range.to}`}
+              prefetch={false}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/70 hover:border-rjnx-blue/40 hover:text-rjnx-blue"
+            >
+              Export {dataset} CSV
+            </Link>
+          ))}
+        </div>
+      </AdminPanel>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Users" value={formatNumber(stats.total_users ?? 0)} icon={<TrendingUp className="size-4" />} accent="blue" />

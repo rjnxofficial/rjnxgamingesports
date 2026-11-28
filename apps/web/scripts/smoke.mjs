@@ -178,6 +178,20 @@ for (const route of ADMIN_ROUTES) {
   }
 }
 
+// 4b. report export must never serve data to anonymous callers
+for (const dataset of ["registrations", "payments", "users"]) {
+  try {
+    const result = await get(`/admin/reports/export?dataset=${dataset}`);
+    if (result.status === 200) {
+      failures.push(`/admin/reports/export?dataset=${dataset}: served data to an anonymous request`);
+    } else if (![302, 303, 307, 308, 401, 403].includes(result.status)) {
+      failures.push(`/admin/reports/export?dataset=${dataset}: unexpected status ${result.status}`);
+    }
+  } catch (error) {
+    failures.push(`/admin/reports/export: request failed (${error.message})`);
+  }
+}
+
 // 5. headers
 try {
   const home = await get("/");
