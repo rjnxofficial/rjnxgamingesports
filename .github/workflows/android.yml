@@ -26,6 +26,11 @@ on:
         default: ""
         type: choice
         options: ["", "preview", "production-apk", "production"]
+      smoke_only:
+        description: "Skip the Gradle build and smoke-test the newest successful APK artifact"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: android-${{ github.ref }}
@@ -54,6 +59,19 @@ jobs:
       - name: Typecheck
         run: npm run typecheck --workspace @rjnx/mobile
 
+      # Guards the crash class that only appears on a device: expo-router treats
+      # a route-local binding named ErrorBoundary as its own route boundary.
+      - name: Route module check
+        run: npm run verify:routes --workspace @rjnx/mobile
+
+      # React must match the renderer compiled into React Native, otherwise the
+      # release app crashes at startup (this is what broke the earlier APK).
+      - name: React version alignment
+        run: npm run verify:react --workspace @rjnx/mobile
+
+      - name: Expo dependency check
+        run: npx expo install --check
+
       - name: Metro bundle check
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
@@ -65,6 +83,7 @@ jobs:
   build:
     name: Release APK + AAB
     needs: quality
+    if: github.event.inputs.smoke_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -233,6 +252,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
+        id: upload-apk
         uses: actions/upload-artifact@v7
         with:
           name: rjnx-esports-apk
@@ -247,6 +267,156 @@ jobs:
           path: /tmp/rjnx-out/*.aab
           if-no-files-found: error
           retention-days: 30
+
+  # Reproduces the app start on a real Android runtime. A successful Gradle build
+  # says nothing about whether the JS bundle boots, so this job installs the APK
+  # on an emulator, cold-starts it, and fails with the actual FATAL EXCEPTION
+  # from logcat when the process dies. It always publishes the log to the step
+  # summary and the PR comment, so the crash reason is readable without
+  # downloading artifacts.
+  smoke:
+    name: Startup smoke test (emulator)
+    needs: [build]
+    if: always() && (needs.build.result == 'success' || github.event.inputs.smoke_only == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read # download the APK artifact from the build job / earlier run
+      pull-requests: write
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://nuckewrlcjphjmnfgilo.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj' }}
+      EXPO_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rjnxgamingesports.com' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # "configured" proves the real build boots; "unconfigured" proves the
+          # app degrades to its configuration screen instead of crashing. Both
+          # APKs come from the same build, only the assertion differs, so the
+          # matrix documents the expected behaviour rather than the env.
+          - label: configured
+            mode: configured
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Enable KVM (emulator acceleration)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || echo "::warning::/dev/kvm unavailable — emulator will run without acceleration"
+
+      - name: Download the built APK
+        uses: actions/download-artifact@v7
+        if: needs.build.result == 'success'
+        with:
+          name: rjnx-esports-apk
+          path: /tmp/rjnx-apk
+
+      # smoke_only reuses the newest successful APK from this branch so a logcat
+      # iteration takes minutes instead of rebuilding Gradle from scratch.
+      # Every failure mode is asserted with an annotation, because the step log
+      # is not always reachable from the tooling that triages these runs.
+      - name: Download the newest successful APK (smoke_only)
+        if: needs.build.result != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/$1"; }
+
+          echo "branch=$BRANCH"
+          api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100&status=success" > /tmp/runs.json || {
+            echo "::error title=rjnx smoke::cannot list workflow runs"; exit 1; }
+          run_id=$(BRANCH="$BRANCH" node -e '
+            const data = require("/tmp/runs.json");
+            const match = (data.workflow_runs || []).find(
+              (run) => run.name === "Android App" && run.head_branch === process.env.BRANCH,
+            );
+            process.stdout.write(match ? String(match.id) : "");
+          ')
+          if [ -z "$run_id" ]; then
+            echo "::error title=rjnx smoke::no successful Android App run on $BRANCH — run the full workflow"
+            exit 1
+          fi
+          echo "::notice title=rjnx smoke::reusing run $run_id"
+
+          api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" > /tmp/artifacts.json || {
+            echo "::error title=rjnx smoke::cannot list artifacts of run $run_id"; exit 1; }
+          artifact_id=$(node -e '
+            const data = require("/tmp/artifacts.json");
+            const match = (data.artifacts || []).find((a) => a.name === "rjnx-esports-apk" && !a.expired);
+            process.stdout.write(match ? String(match.id) : "");
+          ')
+          if [ -z "$artifact_id" ]; then
+            echo "::error title=rjnx smoke::run $run_id has no unexpired rjnx-esports-apk artifact"
+            exit 1
+          fi
+          echo "downloading artifact $artifact_id"
+          curl -fsSL -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" -o /tmp/rjnx-apk.zip || {
+            echo "::error title=rjnx smoke::artifact download failed"; exit 1; }
+          mkdir -p /tmp/rjnx-apk && unzip -q -o /tmp/rjnx-apk.zip -d /tmp/rjnx-apk
+          find /tmp/rjnx-apk -type f | head
+          if ! find /tmp/rjnx-apk -type f -name '*.apk' | grep -q .; then
+            echo "::error title=rjnx smoke::artifact zip has no .apk"; exit 1
+          fi
+
+      - name: Run the app on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SMOKE_MODE: ${{ matrix.mode }}
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 3072
+          # The action runs this with /usr/bin/sh; the wrapper is POSIX-only.
+          script: sh apps/mobile/scripts/smoke-emulator-entry.sh
+
+      - name: Publish logcat summary
+        if: always()
+        run: |
+          {
+            echo "### Startup smoke test (${{ matrix.mode }})"
+            echo
+            echo '```'
+            cat /tmp/rjnx-smoke/report.txt 2>/dev/null || echo "no report produced"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "---- crash slice ----"
+          cat /tmp/rjnx-smoke/crash-slice.txt 2>/dev/null || true
+
+      - name: Comment the crash log on the pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          body=$(printf '### Android startup smoke (%s)\n\n```\n%s\n```\n' \
+            "${{ matrix.mode }}" \
+            "$(tail -c 55000 /tmp/rjnx-smoke/crash-slice.txt 2>/dev/null || echo 'no log captured')")
+          gh pr comment "$PR" --body "$body" || echo "::warning::could not comment on the PR"
+
+      - name: Upload logcat
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rjnx-startup-logcat-${{ matrix.mode }}
+          path: /tmp/rjnx-smoke/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
   eas-build:
     name: EAS build (${{ github.event.inputs.profile }})

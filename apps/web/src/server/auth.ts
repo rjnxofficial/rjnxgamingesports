@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { RjnxClient } from "@/lib/supabase/types";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { hasSupabaseConfig } from "@/lib/env";
 import { ROLE_WEIGHT, type Profile, type Role } from "@rjnx/shared";
 
 export interface SessionContext {
@@ -24,6 +25,9 @@ function normaliseRoles(value: unknown): Role[] {
 
 /** Returns the current session context or null when signed out. */
 export async function getSessionContext(): Promise<SessionContext | null> {
+  // No configuration means no session; it must not throw during prerender or
+  // when a deployment is missing its environment variables.
+  if (!hasSupabaseConfig()) return null;
   const supabase = await createServerSupabase();
   const {
     data: { user },

@@ -2,13 +2,19 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { RjnxClient } from "./types";
 import { env } from "@/lib/env";
-import { RJNX_SCHEMA } from "./client";
+import { RJNX_SCHEMA } from "./schema";
 
 /**
  * Server Supabase client bound to the request cookies.
  * The session is read-only inside Server Components; cookie writes are handled
  * by middleware.ts.
  */
+export function SupabaseConfigError() {
+  return new Error(
+    "Supabase is not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+  );
+}
+
 export async function createServerSupabase(): Promise<RjnxClient> {
   const cookieStore = await cookies();
 

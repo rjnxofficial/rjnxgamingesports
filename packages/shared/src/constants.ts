@@ -117,6 +117,11 @@ export const ROLE_WEIGHT: Record<Role, number> = {
 
 export const STAFF_ROLES: Role[] = ["super_admin", "admin", "tournament_manager", "moderator"];
 
+/** True when any of `roles` is at least as privileged as `minimum`. */
+export function rolesAtLeast(roles: readonly Role[], minimum: Role): boolean {
+  return roles.some((role) => (ROLE_WEIGHT[role] ?? 0) >= ROLE_WEIGHT[minimum]);
+}
+
 export const PAYMENT_STATUSES = ["created", "pending", "paid", "failed", "refunded"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 

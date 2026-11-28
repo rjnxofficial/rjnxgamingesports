@@ -15,14 +15,27 @@
     "lint": "npm run lint -w @rjnx/web",
     "typecheck": "npm run typecheck -w @rjnx/shared && npm run typecheck -w @rjnx/web && npm run typecheck -w @rjnx/mobile",
     "test": "npm run test -w @rjnx/shared",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run verify:workflows && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run verify:workflows && npm run verify:routes && npm run verify:react && npm run site:audit && npm run build",
     "mobile": "npm run start -w @rjnx/mobile",
     "mobile:android": "npm run android -w @rjnx/mobile",
     "db:push": "npm run db:push -w @rjnx/web",
     "db:check": "npm run db:check -w @rjnx/web",
-    "verify:workflows": "node scripts/verify-workflows.mjs"
+    "verify:workflows": "node scripts/verify-workflows.mjs",
+    "admin:audit": "npm run admin:audit -w @rjnx/web",
+    "verify:routes": "npm run verify:routes -w @rjnx/mobile",
+    "verify:react": "npm run verify:react -w @rjnx/mobile",
+    "site:audit": "npm run site:audit -w @rjnx/web"
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "devDependencies": {},
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

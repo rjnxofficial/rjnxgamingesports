@@ -4,12 +4,27 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@rjnx/shared": ["../../packages/shared/src/index.ts"],
-      "@rjnx/shared/*": ["../../packages/shared/src/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@rjnx/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@rjnx/shared/*": [
+        "../../packages/shared/src/*"
+      ]
     },
-    "types": ["react", "react-native", "expo"]
+    "types": [
+      "react",
+      "react-native",
+      "expo"
+    ]
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

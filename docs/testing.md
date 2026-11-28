@@ -1,6 +1,6 @@
 # Testing & QA report
 
-Snapshot date: 2026-11-26. Every command below was executed in this repository.
+Snapshot date: 2026-11-28. Every command below was executed in this repository.
 
 ## 1. Automated gates
 
@@ -9,18 +9,26 @@ Snapshot date: 2026-11-26. Every command below was executed in this repository.
 | Shared typecheck | `npm run typecheck -w @rjnx/shared` | ✅ pass |
 | Website typecheck | `npm run typecheck -w @rjnx/web` | ✅ pass |
 | Android typecheck | `npm run typecheck -w @rjnx/mobile` | ✅ pass |
-| Unit tests | `npm test` (Node test runner) | ✅ 15/15 pass |
+| Unit tests | `npm test` (Node test runner) | ✅ 28/28 pass (scoring + role policy + admin guards) |
 | Lint | `npm run lint` (ESLint 9 flat config) | ✅ 0 errors, 0 warnings |
 | Production build | `npm run build` (Next 15) | ✅ 55 route entries (46 pages + 6 handlers + 2 metadata + 404), ~103 kB shared JS |
 | Runtime smoke test | `next start` + 40 HTTP requests | ✅ 0 × 5xx, auth gates redirect correctly |
 | Android bundle | `npx expo export --platform android` | ✅ Hermes bundle 5.17 MB |
 | Android native config | `npx expo prebuild -p android` | ✅ project generates cleanly |
 | Android project audit | `npm run android:verify -w @rjnx/mobile` | ✅ applicationId, versionCode, signing, fonts, SDK levels |
+| React/renderer alignment | `npm run verify:react` | ✅ react 19.1.0 == react-native-renderer 19.1.0, single copy |
+| Route module guard | `npm run verify:routes -w @rjnx/mobile` | ✅ no stray `ErrorBoundary` bindings, every screen has a default export |
+| Admin Command Center audit | `node apps/web/scripts/admin-audit.mjs` | ✅ 15 routes, 23 guarded actions, 23 audited mutations |
+| Website completeness audit | `node apps/web/scripts/site-audit.mjs` | ✅ 13 public pages + dynamic routes, auth + dashboard surfaces, SEO |
+| Android emulator cold start | CI `Startup smoke test` job | ✅ app launched, no `FATAL EXCEPTION`, `RJNXStartup boot:ui-ready` logged |
 | Android signing (no secrets) | `node scripts/configure-android-signing.mjs` | ✅ exits 0, leaves stock debug signing untouched |
 | Android signing (base64 keystore) | same script + `ANDROID_KEYSTORE_BASE64` | ✅ `keystore.properties` + conditional `signingConfigs.release` patch |
 | Android SDK requirements | `npm run android:sdk -w @rjnx/mobile` | ✅ compile 36 / target 36 / min 24, build-tools 36.0.0, ndk 27.1.12297006 |
 | Workflow lint | `npm run verify:workflows` | ✅ 3 workflows, no `secrets.*` in `if:`, all actions on node24 majors |
-| Supabase schema audit | `node apps/web/scripts/verify-supabase.mjs` | ✅ 7 migrations, 21 tables all RLS-protected, 8 RPCs |
+| Supabase schema audit | `node apps/web/scripts/verify-supabase.mjs` | ✅ 8 migrations, 21 tables all RLS-protected, 8 RPCs |
+| Production smoke test | `node apps/web/scripts/smoke.mjs <url>` | ✅ health + 15 public routes + auth gates + 15 admin gates |
+| Backend probe | `node apps/web/scripts/db-status.mjs` | reports per-table/RPC reachability with the publishable key |
+| Build without env | `env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_ANON_KEY npm run build` | ✅ succeeds, degrades to a configuration state instead of crashing |
 
 `npm run verify` runs typecheck → lint → tests → build in one command; it is the
 same sequence CI enforces before deploying.
@@ -139,6 +147,66 @@ configuration + documented steps rather than a live run:
    signature/webhook logic is unit-verifiable by inspection of
    `apps/web/src/lib/payments/razorpay.ts`.
 
+## 6a. Startup-crash investigation (Android release APK)
+
+### Root cause (found, fixed, verified)
+
+The first release APK crashed immediately after the splash. The emulator harness
+reproduced it and logcat reported:
+
+```
+E/ReactNativeJS: Warning: Incompatible React versions: The "react" and
+"react-native-renderer" packages must have the exact same version.
+  - react:                  19.1.10
+  - react-native-renderer:  19.1.0
+E/ReactNativeJS: { [TypeError: Cannot read property 'ErrorBoundary' of undefined]
+  componentStack: at ContextNavigator ... at ExpoRoot }
+FATAL EXCEPTION: mqt_v_native
+```
+
+Expo SDK 54 / React Native 0.81 compile their renderer against **React 19.1.0**,
+but both workspaces declared `react@19.1.10` and the monorepo hoisted that copy
+into the Android bundle. With a mismatched React, expo-router's boundary lookup
+resolved to `undefined`, so the very first render threw.
+
+Fix: `react`/`react-dom` are pinned to `19.1.0` in the root, web and mobile
+manifests with npm `overrides`, the lockfile is regenerated, and
+`apps/mobile/scripts/verify-react-version.mjs` fails CI whenever the resolved
+React differs from the renderer or more than one React copy exists. The verified
+run (`#46144234335`) builds the APK/AAB and passes the emulator cold start.
+
+A successful `assembleRelease` says nothing about whether the app starts. The
+release build has no developer overlay, so any JS error surfaces as a frozen
+splash screen and nothing else. Actions taken:
+
+1. **Reproduction harness in CI.** `smoke` job in `.github/workflows/android.yml`
+   boots a KVM-accelerated API 34 emulator, installs the exact artifact from the
+   build job, cold-starts it, waits 25 s and then asserts:
+   `pidof <package>` is non-empty, no `FATAL EXCEPTION` in logcat, and the JS
+   bundle logged `RJNXStartup … boot:ui-ready`.
+   `apps/mobile/scripts/smoke-android-apk.sh` writes `report.txt`,
+   `crash-slice.txt` and `logcat-tail.txt`; the workflow prints the slice into
+   the run summary, comments it on the PR and uploads it as an artifact.
+2. **The white screen is now impossible to hide.** `lib/runtime.ts` validates
+   `EXPO_PUBLIC_*` before the first render and installs a global error handler
+   that logs to logcat under the tag `RJNXStartup`; the root layout renders a
+   `STARTUP FAILED` / `CONFIGURATION ERROR` screen with the actual message, and
+   every subtree sits inside `components/error-boundary.tsx`.
+3. **Startup can no longer hang on fonts or splash.** Font loading has a 4 s
+   timeout and the native splash has a hard 5 s hide budget, so a missing font
+   file degrades to system fonts instead of freezing.
+4. **Configuration is no longer guessed.** The hard-coded Supabase fallback in
+   the app and the fake `extra.eas.projectId` placeholder were removed; a bundle
+   built without config now says so on screen and in logcat.
+5. **Known crash classes audited:** Expo Router routes (no duplicate routes, all
+   default exports present), Reanimated Babel plugin (the plugin entry now
+   resolves `react-native-worklets/plugin`; `react-native-worklets` is installed
+   and autolinked), gesture-handler root view, SecureStore fallback for sessions
+   over 2 KB, and storage/overlay permissions blocked.
+
+The emulator result for each build is reported with the CI numbers; the crash
+log is attached to the run either way.
+
 ## 6b. Issues found in this audit and fixed
 
 | Issue | Impact | Fix |
@@ -156,6 +224,15 @@ configuration + documented steps rather than a live run:
 | Webhook created a notification with a possibly-null user id | failed inserts | registration/user fallback |
 | `robots.txt`/CSP framing | preview + SEO headers | CSP `frame-ancestors`, dynamic robots |
 | Contact form | — | already wired to `support_tickets` (verified) |
+| **React 19.1.10 vs renderer 19.1.0** | **release APK crashed instantly (`ErrorBoundary` of undefined)** | pin react/react-dom to 19.1.0 + overrides + `verify:react` CI gate |
+| Admin role actions allowed a super admin to change their own roles | self-promotion / self-lockout | session-based self-change guard on grant and revoke |
+| Five admin mutations had no audit entry | unauditable privileged changes | audit writes for leaderboard recalc, banners, support replies, scoring rules |
+| Reports had no date range and no export | manual SQL for every report | `from`/`to` filters + staff-only CSV export route |
+| `expo-router` treats a route-local `ErrorBoundary` binding as its own boundary | "Cannot read property ErrorBoundary" class of crashes | alias the UI boundary + `verify:routes` CI gate |
+| **`rjnx` schema not exposed in PostgREST** | **every query from web + Android failed (`PGRST106`); the deployed site had no data** | migration `0008` grants + `0009` sets `pgrst.db_schemas` and reloads PostgREST automatically; CI annotation names any residual case |
+| `RJNX_SCHEMA` imported from a `"use client"` module into server code | runtime crash "Attempted to call RJNX_SCHEMA() from the server" | moved to `lib/supabase/schema.ts` |
+| Missing `NEXT_PUBLIC_*` env broke the production build | deploy could not be built at all | lazy getters + `optionalEnv()`; build verified with and without env |
+| Release APK could white-screen with no diagnostics | unverifiable startup | runtime diagnostics, error boundaries, splash/font timeouts, emulator smoke job |
 
 ## 7. Regression checklist before each release
 

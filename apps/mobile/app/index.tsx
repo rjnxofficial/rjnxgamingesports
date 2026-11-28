@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Animated } from "react-native";
 import { useAuth } from "@/lib/auth";
 import { Logo } from "@/components/logo";
 import { theme } from "@/lib/theme";
+import { log } from "@/lib/runtime";
 
 export default function IndexScreen() {
   const { ready, session } = useAuth();
@@ -19,6 +20,10 @@ export default function IndexScreen() {
     animation.start();
     return () => animation.stop();
   }, [pulse]);
+
+  React.useEffect(() => {
+    if (ready) log("info", `router: session ${session ? "present" : "absent"} → ${session ? "/(app)" : "/(auth)/sign-in"}`);
+  }, [ready, session]);
 
   if (ready) {
     return <Redirect href={session ? "/(app)" : "/(auth)/sign-in"} />;

@@ -15,7 +15,9 @@
     "ios": "expo run:ios",
     "android:sign": "node scripts/configure-android-signing.mjs",
     "android:verify": "node scripts/verify-android-project.mjs",
-    "android:sdk": "node scripts/android-sdk-requirements.mjs"
+    "android:sdk": "node scripts/android-sdk-requirements.mjs",
+    "verify:routes": "node scripts/verify-bundle-exports.mjs",
+    "verify:react": "node scripts/verify-react-version.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -31,8 +33,7 @@
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
-    "react": "19.1.10",
-    "react-dom": "19.1.10",
+    "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",

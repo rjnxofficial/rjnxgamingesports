@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:push": "node scripts/db-setup.mjs",
-    "db:check": "node scripts/db-check.mjs"
+    "db:check": "node scripts/db-check.mjs",
+    "admin:audit": "node scripts/admin-audit.mjs",
+    "site:audit": "node scripts/site-audit.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "5.9.2",
@@ -22,8 +24,8 @@
     "framer-motion": "12.43.0",
     "lucide-react": "0.577.0",
     "next": "15.5.29",
-    "react": "19.1.10",
-    "react-dom": "19.1.10",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-hook-form": "7.64.0",
     "sonner": "2.0.8",
     "tailwind-merge": "3.7.1",

@@ -102,6 +102,7 @@ docs/         setup · deployment · supabase-setup · apk · api · admin · te
 * [Admin guide](./docs/admin.md) — roles, pages, operational workflows
 * [Deployment](./docs/deployment.md) — Vercel, CI secrets, release checklist
 * [Testing report](./docs/testing.md) — gates, coverage, audits, limitations
+* [Delivery report](./docs/DELIVERY-REPORT.md) — verdict per requirement, remaining owner actions
 
 ## Security notes
 

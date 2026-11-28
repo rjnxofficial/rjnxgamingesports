@@ -12,17 +12,45 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+/**
+ * The project URL and publishable key belong in the environment
+ * (`apps/web/.env.local`, Vercel project settings, GitHub secrets). They are
+ * deliberately NOT hard-coded here: a deployment that forgets them must fail
+ * loudly at request time instead of silently talking to someone's project.
+ */
 export const env = {
-  supabaseUrl: required(
-    "NEXT_PUBLIC_SUPABASE_URL",
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://nuckewrlcjphjmnfgilo.supabase.co",
-  ),
-  supabaseAnonKey: required(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_bj2iYWHvILa6__h5bZrsmA_F2CPG1gj",
-  ),
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  get supabaseUrl(): string {
+    return required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL);
+  },
+  get supabaseAnonKey(): string {
+    return required("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  },
+  get siteUrl(): string {
+    return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  },
 };
+
+/**
+ * Safe accessor for code paths that must render *something* even when the
+ * deployment is missing its environment (layout metadata, health, error pages).
+ * Returns the configured project or a clearly invalid placeholder, so a real
+ * request fails with a readable Supabase error instead of crashing a render.
+ */
+export function optionalEnv() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  return {
+    configured: Boolean(url && anonKey),
+    supabaseUrl: url || "https://not-configured.supabase.co",
+    supabaseAnonKey: anonKey || "not-configured",
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  };
+}
+
+/** True when the public Supabase configuration is present. */
+export function hasSupabaseConfig(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
 
 /** Server-only privileged configuration. Never import from a client component. */
 export function serverEnv() {
